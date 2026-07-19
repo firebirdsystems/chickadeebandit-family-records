@@ -1,0 +1,66 @@
+{
+  "id": "family-records",
+  "name": "Family Records",
+  "version": "1.0.0",
+  "description": "One place for the paperwork and the details that follow a child between homes — custody agreements, insurance cards, consent forms, plus sizes, allergies, doctor and school contacts. Records with an expiry date surface before they lapse.",
+  "entrypoint": "index.html",
+  "runtime": "static",
+  "icon": "🗂️",
+  "category": "family",
+  "tags": [
+    "documents",
+    "records",
+    "custody",
+    "co-parenting",
+    "vault"
+  ],
+  "contexts": [
+    "household",
+    "shared_space"
+  ],
+  "data_access": {
+    "reads": [
+      "family.members"
+    ],
+    "writes": []
+  },
+  "permissions": {
+    "default_audience": "adults",
+    "requires_approval": false
+  },
+  "storage": "db",
+  "db_plaintext_columns": [
+    "expires_on"
+  ],
+  "row_policies": {
+    "records": {
+      "kind": "adult_only",
+      "audit_writes": true
+    },
+    "child_info": {
+      "kind": "adult_only",
+      "audit_writes": true
+    }
+  },
+  "glance": {
+    "source": {
+      "kind": "sql",
+      "query": "SELECT title AS title, category AS subtitle, expires_on AS at, child_id AS member_id FROM app_family_records__records WHERE expires_on IS NOT NULL AND expires_on >= :today ORDER BY expires_on LIMIT 3"
+    },
+    "display": {
+      "template": "list",
+      "title": "title",
+      "subtitle": "subtitle",
+      "when": "at",
+      "owner": "member_id"
+    }
+  },
+  "nav": {
+    "label": "Family Records"
+  },
+  "resource_limits": {
+    "max_db_bytes": 52428800,
+    "max_file_bytes": 20971520,
+    "max_files_bytes": 524288000
+  }
+}
