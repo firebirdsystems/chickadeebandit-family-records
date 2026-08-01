@@ -92,10 +92,10 @@
   </div>
 
   <script type="module">
-    import { esc, isAdult, hubConfirm, hubAlert, createFilesHelper } from "/hub-sdk.js";
+    import { esc, isAdult, hubConfirm, hubAlert, createFilesHelper, searchMatch } from "/hub-sdk.js";
     import {
       CATEGORIES, categoryFor, expiryStatus, expiryLabel, visibleRecords,
-      validateRecord, CHILD_INFO_FIELDS, groupedChildInfo, isChildInfoEmpty, fmtBytes,
+      validateRecord, CHILD_INFO_FIELDS, groupedChildInfo, isChildInfoEmpty, fmtBytes, searchableFields,
     } from "./logic.js";
 
     // ── Runtime globals ──────────────────────────────────────────────────────
@@ -225,7 +225,10 @@
     // ── Records view ─────────────────────────────────────────────────────────
     function renderRecords(el) {
       const today = todayStr();
-      const shown = visibleRecords(records, { childId: filterChild, category: filterCategory, query }, today);
+      // Text search runs first with the shared matcher; visibleRecords keeps
+      // its own job (child/category filtering and expiry-urgency ordering).
+      const matched = query ? records.filter(r => searchMatch(query, searchableFields(r))) : records;
+      const shown = visibleRecords(matched, { childId: filterChild, category: filterCategory }, today);
 
       const childPills = [["all", "Everyone"], ...children().map(c => [c.id, c.name])]
         .map(([id, label]) =>

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   CATEGORIES, categoryFor, daysUntil, expiryStatus, expiryLabel, EXPIRY_SOON_DAYS,
   visibleRecords, validateRecord, CHILD_INFO_FIELDS, groupedChildInfo,
-  isChildInfoEmpty, fmtBytes,
+  isChildInfoEmpty, fmtBytes, searchableFields,
 } from "../src/logic.js";
 
 const TODAY = "2026-07-19";
@@ -97,16 +97,6 @@ describe("visibleRecords", () => {
     expect(visibleRecords(set, { category: "all" }, TODAY)).toHaveLength(2);
   });
 
-  it("searches title and note, case-insensitively, ignoring surrounding space", () => {
-    const set = [
-      rec({ id: "t", title: "Dental records", note: "" }),
-      rec({ id: "n", title: "Misc", note: "Ask the DENTIST" }),
-      rec({ id: "x", title: "Passport", note: "In the safe" }),
-    ];
-    expect(visibleRecords(set, { query: "  dent " }, TODAY).map(r => r.id).sort()).toEqual(["n", "t"]);
-    expect(visibleRecords(set, { query: "" }, TODAY)).toHaveLength(3);
-  });
-
   it("combines filters and handles missing input", () => {
     const set = [rec({ id: "hit", category: "legal", child_id: "kid-1", title: "Custody order" }),
                  rec({ id: "miss", category: "legal", child_id: "kid-2", title: "Custody order" })];
@@ -183,5 +173,12 @@ describe("fmtBytes", () => {
   });
   it("returns '' for nothing useful", () => {
     for (const bad of [0, -1, null, undefined, NaN, "abc"]) expect(fmtBytes(bad)).toBe("");
+  });
+});
+
+describe("searchableFields", () => {
+  it("matches on the note, not just the title", () => {
+    expect(searchableFields(rec({ title: "Misc", note: "Ask the dentist" })))
+      .toContain("Ask the dentist");
   });
 });

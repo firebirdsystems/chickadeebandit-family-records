@@ -60,15 +60,22 @@ export function expiryLabel(record, todayStr) {
  * (expired first, then soon), because those are the ones needing action; the
  * rest fall back to newest-first.
  */
-export function visibleRecords(records, { childId = "all", category = "all", query = "" } = {}, todayStr) {
-  const q = query.trim().toLowerCase();
+/**
+ * Fields the in-app search matches against (see hub-sdk `searchMatch`). The
+ * note counts as well as the title — a record is often remembered by what it
+ * says ("policy number", "Dr Ruiz") rather than by what it was filed as.
+ */
+export function searchableFields(record) {
+  return [record.title, record.note];
+}
+
+export function visibleRecords(records, { childId = "all", category = "all" } = {}, todayStr) {
   const rank = { expired: 0, soon: 1, ok: 2, none: 2 };
 
   return (records ?? [])
     .filter((r) => {
       if (childId !== "all" && (r.child_id ?? "") !== childId) return false;
       if (category !== "all" && r.category !== category) return false;
-      if (q && !`${r.title ?? ""} ${r.note ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     })
     .sort((a, b) => {
