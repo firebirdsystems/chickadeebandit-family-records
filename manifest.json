@@ -52,6 +52,14 @@
       "on_removed": "keep"
     }
   },
+  "agenda": {
+    "kind": "reminder",
+    "label": "Record expires",
+    "source": {
+      "kind": "sql",
+      "query": "SELECT id AS id, title AS title, category AS subtitle, expires_on AS when_at, child_id AS member_id FROM app_family_records__records WHERE expires_on = :today LIMIT 20"
+    }
+  },
   "glance": {
     "source": {
       "kind": "sql",
