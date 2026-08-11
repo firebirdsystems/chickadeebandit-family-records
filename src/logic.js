@@ -154,3 +154,66 @@ export function fmtBytes(bytes) {
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return `${v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
 }
+
+// ── Versioning, retirement and the governed purge ─────────────────────────────
+// Records are never deleted by the app: replacing one keeps the version it
+// replaced (file included), and deleting one is a `retired_at` timestamp. These
+// helpers are what the UI reasons with, kept here so they are testable without
+// a DOM or a database.
+
+/** Records still in force. A retired record has not gone anywhere — it is out
+ *  of the working list, and the history view is where it still lives. */
+export function liveRecords(records) {
+  return (records ?? []).filter((r) => !r.retired_at);
+}
+
+/** Retired records, newest retirement first. */
+export function retiredRecords(records) {
+  return (records ?? [])
+    .filter((r) => r.retired_at)
+    .sort((a, b) => String(b.retired_at).localeCompare(String(a.retired_at)));
+}
+
+/**
+ * Every version of one record, newest first: the row in force, then each
+ * superseded version. `version` numbers them, so the caller can say "v3 of 3"
+ * without counting.
+ */
+export function versionsOf(record, versionRows) {
+  const earlier = (versionRows ?? [])
+    .filter((v) => v.record_id === record?.id)
+    .map((v) => ({ ...v, current: false }))
+    .sort((a, b) => Number(b.version) - Number(a.version));
+  return record ? [{ ...record, current: true }, ...earlier] : earlier;
+}
+
+/**
+ * Where a record stands with the other parent on being destroyed for good.
+ * → { state: 'none' | 'pending' | 'agreed', row? }
+ *
+ * Deliberately NOT "is it my turn?": which side the viewer signs for is a fact
+ * about the live roster that can change between rendering this and clicking it,
+ * so the hub answers it at the moment of the act and tells a mis-sided UI it has
+ * already agreed. Reading it here would be caching exactly the wrong thing.
+ */
+export function purgeStateFor(recordId, purgeRows) {
+  const row = (purgeRows ?? [])
+    .filter((p) => p.record_id === recordId && (p.status === "pending" || p.status === "agreed"))
+    .sort((a, b) => String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")))[0];
+  return row ? { state: row.status === "agreed" ? "agreed" : "pending", row } : { state: "none" };
+}
+
+/**
+ * The child-info fields whose value actually changed. A replace that changes
+ * nothing is refused by the hub (and rightly — it would burn a version and
+ * claim an edit nobody made), so the editor asks this before it sends.
+ */
+export function changedChildInfo(before, after) {
+  const changed = {};
+  for (const [key, value] of Object.entries(after ?? {})) {
+    const previous = before?.[key] ?? null;
+    const next = value === "" ? null : value;
+    if ((previous ?? null) !== (next ?? null)) changed[key] = next;
+  }
+  return changed;
+}

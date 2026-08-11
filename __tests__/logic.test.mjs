@@ -182,3 +182,82 @@ describe("searchableFields", () => {
       .toContain("Ask the dentist");
   });
 });
+
+// ── Versioning, retirement, and the governed purge ───────────────────────────
+
+import {
+  liveRecords, retiredRecords, versionsOf, purgeStateFor, changedChildInfo,
+} from "../src/logic.js";
+
+describe("liveRecords / retiredRecords", () => {
+  const live = { id: "a", title: "Live" };
+  const gone = { id: "b", title: "Retired", retired_at: "2026-05-01T00:00:00Z" };
+  const older = { id: "c", title: "Older", retired_at: "2026-01-01T00:00:00Z" };
+
+  it("splits on the retirement timestamp rather than on absence", () => {
+    expect(liveRecords([live, gone]).map(r => r.id)).toEqual(["a"]);
+    // The retired record is still THERE — that is the whole point of a retire.
+    expect(retiredRecords([live, gone, older]).map(r => r.id)).toEqual(["b", "c"]);
+  });
+  it("tolerates no records at all", () => {
+    expect(liveRecords(undefined)).toEqual([]);
+    expect(retiredRecords(null)).toEqual([]);
+  });
+});
+
+describe("versionsOf", () => {
+  const record = { id: "r1", version: 3, title: "Custody agreement", file_id: "f3" };
+  const versions = [
+    { id: "v1", record_id: "r1", version: 1, file_id: "f1", superseded_at: "2026-01-01T00:00:00Z" },
+    { id: "v2", record_id: "r1", version: 2, file_id: "f2", superseded_at: "2026-02-01T00:00:00Z" },
+    { id: "vX", record_id: "other", version: 1, file_id: "fx", superseded_at: "2026-02-01T00:00:00Z" },
+  ];
+
+  it("lists the row in force first, then earlier versions newest-first", () => {
+    expect(versionsOf(record, versions).map(v => v.version)).toEqual([3, 2, 1]);
+    expect(versionsOf(record, versions)[0].current).toBe(true);
+  });
+  it("keeps every version's own file id — the bytes are what history is for", () => {
+    expect(versionsOf(record, versions).map(v => v.file_id)).toEqual(["f3", "f2", "f1"]);
+  });
+  it("never mixes in another record's versions", () => {
+    expect(versionsOf(record, versions).some(v => v.file_id === "fx")).toBe(false);
+  });
+});
+
+describe("purgeStateFor", () => {
+  const pending = { id: "p1", record_id: "r1", status: "pending", updated_at: "2026-03-02T00:00:00Z" };
+  const declined = { id: "p0", record_id: "r1", status: "declined", updated_at: "2026-03-01T00:00:00Z" };
+
+  it("reports nothing when no proposal is open", () => {
+    expect(purgeStateFor("r1", [declined]).state).toBe("none");
+    expect(purgeStateFor("r1", []).state).toBe("none");
+  });
+  it("reports a pending proposal without guessing whose turn it is", () => {
+    const state = purgeStateFor("r1", [declined, pending]);
+    expect(state.state).toBe("pending");
+    expect(state.row.id).toBe("p1");
+  });
+  it("ignores proposals about other records", () => {
+    expect(purgeStateFor("r2", [pending]).state).toBe("none");
+  });
+});
+
+describe("changedChildInfo", () => {
+  it("sends only what actually changed", () => {
+    const before = { shoe_size: "4", allergies: "Peanuts" };
+    expect(changedChildInfo(before, { shoe_size: "5", allergies: "Peanuts" }))
+      .toEqual({ shoe_size: "5" });
+  });
+  it("treats cleared fields as null rather than empty string", () => {
+    expect(changedChildInfo({ notes: "x" }, { notes: "" })).toEqual({ notes: null });
+  });
+  it("is empty when nothing moved, so no version is burned on a no-op", () => {
+    expect(changedChildInfo({ a: "1" }, { a: "1" })).toEqual({});
+    // An absent previous value and a null new one are the same fact.
+    expect(changedChildInfo({}, { a: null })).toEqual({});
+  });
+  it("treats a first card as all-new", () => {
+    expect(changedChildInfo(undefined, { shoe_size: "4" })).toEqual({ shoe_size: "4" });
+  });
+});

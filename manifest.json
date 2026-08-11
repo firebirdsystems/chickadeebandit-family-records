@@ -1,8 +1,8 @@
 {
   "id": "family-records",
   "name": "Family Records",
-  "version": "1.0.0",
-  "description": "One place for the paperwork and the details that follow a child between homes — custody agreements, insurance cards, consent forms, plus sizes, allergies, doctor and school contacts. Records with an expiry date surface before they lapse.",
+  "version": "1.1.0",
+  "description": "One place for the paperwork and the details that follow a child between homes — custody agreements, insurance cards, consent forms, plus sizes, allergies, doctor and school contacts. Replacing a document keeps the one it replaced, file and all, and deleting is a retirement rather than an erasure; in a co-parenting space only the parents can change a record, and destroying a document for good takes both of them. Records with an expiry date surface before they lapse.",
   "entrypoint": "index.html",
   "runtime": "static",
   "icon": "🗂️",
@@ -34,36 +34,292 @@
   ],
   "row_policies": {
     "records": {
-      "kind": "adult_only",
+      "kind": "endpoint_only",
+      "read": "adult",
       "audit_writes": true
     },
+    "record_versions": {
+      "kind": "endpoint_only",
+      "read": "adult",
+      "audit_writes": true,
+      "retain_days": {
+        "default": 730,
+        "timestamp_column": "superseded_at",
+        "tier": "evidentiary",
+        "file_id_column": "file_id"
+      }
+    },
     "child_info": {
-      "kind": "adult_only",
+      "kind": "endpoint_only",
+      "read": "adult",
+      "audit_writes": true
+    },
+    "child_info_versions": {
+      "kind": "endpoint_only",
+      "read": "adult",
+      "audit_writes": true,
+      "retain_days": {
+        "default": 730,
+        "timestamp_column": "superseded_at",
+        "tier": "evidentiary"
+      }
+    },
+    "record_purges": {
+      "kind": "endpoint_only",
+      "read": "adult",
+      "audit_writes": true
+    },
+    "record_purge_agreements": {
+      "kind": "endpoint_only",
+      "read": "adult",
       "audit_writes": true
     }
   },
-  "member_references": {
+  "file_acls": {
+    "write": {
+      "require_role": "adult",
+      "steward_household_only": true
+    }
+  },
+  "versioned_records": {
     "records": {
-      "column": "created_by",
-      "on_removed": "keep"
+      "table": "records",
+      "version_table": "record_versions",
+      "version_fk_column": "record_id",
+      "allowed_columns": [
+        "title",
+        "record_kind",
+        "category",
+        "child_id",
+        "note",
+        "expires_on",
+        "file_id",
+        "mime_type",
+        "size_bytes"
+      ],
+      "required_columns": [
+        "title",
+        "category"
+      ],
+      "writer_column": "created_by",
+      "created_at_column": "created_at",
+      "updated_at_column": "updated_at",
+      "file_column": "file_id",
+      "retire": {
+        "column": "retired_at",
+        "actor_column": "retired_by",
+        "reason_column": "retire_reason",
+        "reason_max_length": 500
+      },
+      "write_acl": {
+        "require_role": "adult",
+        "require_steward_household": true
+      },
+      "allowed_values": {
+        "record_kind": [
+          "document",
+          "reference"
+        ],
+        "category": [
+          "legal",
+          "medical",
+          "school",
+          "insurance",
+          "identity",
+          "other"
+        ]
+      },
+      "max_text_lengths": {
+        "title": 200,
+        "record_kind": 20,
+        "category": 20,
+        "child_id": 120,
+        "note": 2000,
+        "expires_on": 10,
+        "file_id": 120,
+        "mime_type": 120
+      },
+      "max_versions": 50
     },
     "child_info": {
-      "column": "updated_by",
-      "on_removed": "keep"
+      "table": "child_info",
+      "id_column": "child_id",
+      "version_table": "child_info_versions",
+      "version_fk_column": "child_id",
+      "allowed_columns": [
+        "child_id",
+        "blood_type",
+        "allergies",
+        "medications",
+        "doctor_name",
+        "doctor_phone",
+        "dentist_name",
+        "dentist_phone",
+        "school_name",
+        "school_phone",
+        "teacher_name",
+        "shirt_size",
+        "pants_size",
+        "shoe_size",
+        "notes"
+      ],
+      "required_columns": [
+        "child_id"
+      ],
+      "updated_by_column": "updated_by",
+      "updated_at_column": "updated_at",
+      "write_acl": {
+        "require_role": "adult"
+      },
+      "max_text_lengths": {
+        "child_id": 120,
+        "blood_type": 200,
+        "allergies": 1000,
+        "medications": 1000,
+        "doctor_name": 200,
+        "doctor_phone": 200,
+        "dentist_name": 200,
+        "dentist_phone": 200,
+        "school_name": 200,
+        "school_phone": 200,
+        "teacher_name": 200,
+        "shirt_size": 200,
+        "pants_size": 200,
+        "shoe_size": 200,
+        "notes": 1000
+      },
+      "max_versions": 200
     }
+  },
+  "agreements": {
+    "record_purge_agreements": {
+      "party_mode": "steward_households",
+      "participant_columns": [
+        "household_a_id",
+        "household_b_id"
+      ],
+      "agreement_columns": {
+        "household_a_id": "household_a_agreed",
+        "household_b_id": "household_b_agreed"
+      },
+      "status_column": "status",
+      "pending_value": "pending",
+      "locked_value": "agreed",
+      "locked_at_column": "agreed_at",
+      "updated_at_column": "updated_at",
+      "init_from_table": "record_purges",
+      "resolution_values": {
+        "household_a_id": "withdrawn",
+        "household_b_id": "declined"
+      },
+      "init_columns": [
+        "household_a_id",
+        "household_b_id",
+        "record_id"
+      ],
+      "snapshot_columns": [
+        "record_title",
+        "reason",
+        "proposed_by"
+      ],
+      "proposal": {
+        "allowed_columns": [
+          "record_id",
+          "record_title",
+          "reason"
+        ],
+        "required_columns": [
+          "record_id"
+        ],
+        "writer_column": "proposed_by",
+        "created_at_column": "created_at",
+        "updated_at_column": "updated_at",
+        "max_text_lengths": {
+          "record_id": 120,
+          "record_title": 200,
+          "reason": 500
+        },
+        "max_open": 10
+      }
+    }
+  },
+  "file_purge": {
+    "records": {
+      "agreement_table": "record_purge_agreements",
+      "record_id_column": "record_id",
+      "versioned_record": "records"
+    }
+  },
+  "member_references": {
+    "records": [
+      {
+        "column": "created_by",
+        "on_removed": "keep"
+      },
+      {
+        "column": "retired_by",
+        "on_removed": "keep"
+      },
+      {
+        "column": "child_id",
+        "on_removed": "keep"
+      }
+    ],
+    "record_versions": [
+      {
+        "column": "created_by",
+        "on_removed": "keep"
+      },
+      {
+        "column": "superseded_by",
+        "on_removed": "keep"
+      },
+      {
+        "column": "child_id",
+        "on_removed": "keep"
+      }
+    ],
+    "child_info": [
+      {
+        "column": "updated_by",
+        "on_removed": "keep"
+      }
+    ],
+    "child_info_versions": [
+      {
+        "column": "updated_by",
+        "on_removed": "keep"
+      },
+      {
+        "column": "superseded_by",
+        "on_removed": "keep"
+      }
+    ],
+    "record_purges": [
+      {
+        "column": "proposed_by",
+        "on_removed": "keep"
+      }
+    ],
+    "record_purge_agreements": [
+      {
+        "column": "proposed_by",
+        "on_removed": "keep"
+      }
+    ]
   },
   "agenda": {
     "kind": "reminder",
     "label": "Record expires",
     "source": {
       "kind": "sql",
-      "query": "SELECT id AS id, title AS title, category AS subtitle, expires_on AS when_at, child_id AS member_id FROM app_family_records__records WHERE expires_on = :today LIMIT 20"
+      "query": "SELECT id AS id, title AS title, category AS subtitle, expires_on AS when_at, child_id AS member_id FROM app_family_records__records WHERE expires_on = :today AND retired_at IS NULL LIMIT 20"
     }
   },
   "glance": {
     "source": {
       "kind": "sql",
-      "query": "SELECT title AS title, category AS subtitle, expires_on AS at, child_id AS member_id FROM app_family_records__records WHERE expires_on IS NOT NULL AND expires_on >= :today ORDER BY expires_on LIMIT 3"
+      "query": "SELECT title AS title, category AS subtitle, expires_on AS at, child_id AS member_id FROM app_family_records__records WHERE expires_on IS NOT NULL AND expires_on >= :today AND retired_at IS NULL ORDER BY expires_on LIMIT 3"
     },
     "display": {
       "template": "list",

@@ -56,6 +56,7 @@
       text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; }
     .chip-expired { background: #fee2e2; color: #991b1b; }
     .chip-soon    { background: #fef3c7; color: #92400e; }
+    .chip-retired { background: #e5e7eb; color: #374151; }
 
     .info-group { margin-bottom: 14px; }
     .info-group h4 { margin: 0 0 6px; font-size: 0.8rem; text-transform: uppercase;
@@ -92,10 +93,14 @@
   </div>
 
   <script type="module">
-    import { esc, isAdult, hubConfirm, hubAlert, createFilesHelper, searchMatch } from "/hub-sdk.js";
+    import {
+      esc, isAdult, hubConfirm, hubAlert, createFilesHelper, searchMatch,
+      createVersionedRecordsHelper,
+    } from "/hub-sdk.js";
     import {
       CATEGORIES, categoryFor, expiryStatus, expiryLabel, visibleRecords,
       validateRecord, CHILD_INFO_FIELDS, groupedChildInfo, isChildInfoEmpty, fmtBytes, searchableFields,
+      liveRecords, retiredRecords, versionsOf, purgeStateFor, changedChildInfo,
     } from "./logic.js";
 
     // ── Runtime globals ──────────────────────────────────────────────────────
@@ -103,6 +108,12 @@
     const DB      = window.__DB_URL      ?? "";
     const FILES   = createFilesHelper(window.__FILES_URL ?? "");
     const CAN_UPLOAD = !!window.__FILES_URL;
+    const APP_ID  = "family-records";
+    // Every write to records and child_info goes through this. The tables are
+    // endpoint_only, so app SQL cannot update or delete them at all — which is
+    // exactly what makes "replacing keeps the old version" a fact rather than a
+    // convention this file happens to follow.
+    const VERSIONED = createVersionedRecordsHelper(APP_ID);
     const P       = "app_family_records__";
     const DEMO    = !DB;
 
@@ -126,6 +137,11 @@
     let me = window.__CURRENT_MEMBER ?? null;
     let members = [], memberMap = new Map();
     let records = [], childInfo = new Map();   // child_id → info row
+    let recordVersions = [], infoVersions = [], purges = [];
+    // Which side of a two-parent agreement this member signs for, or null in a
+    // household install where there is no second party at all. Derived from the
+    // pending rows themselves — the app never sees household ids.
+    let showRetired = false;
     let view = "records";
     let filterChild = "all", filterCategory = "all", query = "";
     let searchTimer = null;
@@ -161,12 +177,20 @@
     async function loadData() {
       if (DEMO) { seedDemo(); return; }
       if (!canRead()) { records = []; childInfo = new Map(); return; }
-      const [recs, info] = await Promise.all([
+      const [recs, info, recVersions, infoVers, purgeRows] = await Promise.all([
         db(`SELECT * FROM ${P}records`).catch(() => ({ rows: [] })),
         db(`SELECT * FROM ${P}child_info`).catch(() => ({ rows: [] })),
+        // Superseded versions carry the file id of the document they held, so
+        // the history list can still link straight to the bytes.
+        db(`SELECT * FROM ${P}record_versions ORDER BY superseded_at DESC`).catch(() => ({ rows: [] })),
+        db(`SELECT * FROM ${P}child_info_versions ORDER BY superseded_at DESC`).catch(() => ({ rows: [] })),
+        db(`SELECT * FROM ${P}record_purge_agreements ORDER BY updated_at DESC`).catch(() => ({ rows: [] })),
       ]);
       records = recs.rows;
       childInfo = new Map(info.rows.map(r => [r.child_id, r]));
+      recordVersions = recVersions.rows;
+      infoVersions = infoVers.rows;
+      purges = purgeRows.rows;
     }
 
     function seedDemo() {
@@ -196,8 +220,18 @@
         dentist_name: "Bright Smile Dental", dentist_phone: "555-0188",
         school_name: "Lakeside Elementary", school_phone: "555-0110", teacher_name: "Ms. Okafor",
         shirt_size: "Youth M", pants_size: "10", shoe_size: "4", notes: "Afraid of thunderstorms.",
-        updated_by: "demo-mom", updated_at: "2026-03-01T10:00:00Z",
+        updated_by: "demo-mom", updated_at: "2026-03-01T10:00:00Z", version: 1,
       }]]);
+      for (const r of records) r.version = 1;
+      records[0].version = 2;   // r1 has one superseded version below
+      recordVersions = [
+        { id: "v1", record_id: "r1", version: 1, superseded_at: "2026-01-02T10:00:00Z",
+          superseded_by: "demo-dad", title: "Custody agreement (draft)", record_kind: "reference",
+          category: "legal", child_id: null, note: "Superseded by the signed copy.",
+          expires_on: null, file_id: null, created_by: "demo-mom", created_at: "2025-12-01T10:00:00Z" },
+      ];
+      infoVersions = [];
+      purges = [];
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -227,8 +261,10 @@
       const today = todayStr();
       // Text search runs first with the shared matcher; visibleRecords keeps
       // its own job (child/category filtering and expiry-urgency ordering).
-      const matched = query ? records.filter(r => searchMatch(query, searchableFields(r))) : records;
+      const pool = showRetired ? retiredRecords(records) : liveRecords(records);
+      const matched = query ? pool.filter(r => searchMatch(query, searchableFields(r))) : pool;
       const shown = visibleRecords(matched, { childId: filterChild, category: filterCategory }, today);
+      const retiredCount = retiredRecords(records).length;
 
       const childPills = [["all", "Everyone"], ...children().map(c => [c.id, c.name])]
         .map(([id, label]) =>
@@ -242,8 +278,12 @@
       el.innerHTML = `
         <div class="toolbar">
           <input type="search" id="q" placeholder="Search records…" value="${esc(query)}" autocomplete="off">
-          <button class="btn btn-primary" id="add">+ Add record</button>
+          ${canWrite() ? `<button class="btn btn-primary" id="add">+ Add record</button>` : ""}
+          ${retiredCount ? `<button class="btn" id="toggle-retired">${showRetired ? "← Back to current" : `Retired (${retiredCount})`}</button>` : ""}
         </div>
+        ${canWrite() ? "" : `<p class="hint">You can open and download everything here. Adding, replacing and
+          retiring records is the parents\u2019 own — that is what keeps this a shared record rather than a shared draft.</p>`}
+        ${openPurges().map(purgeBanner).join("")}
         <div class="pills">${childPills}</div>
         <div class="pills">${catPills}</div>
         ${shown.length ? shown.map(r => recordCard(r, today)).join("") : `
@@ -253,6 +293,15 @@
       `;
 
       el.querySelector("#add")?.addEventListener("click", () => openRecordModal());
+      el.querySelector("#toggle-retired")?.addEventListener("click", () => { showRetired = !showRetired; render(); });
+      el.querySelectorAll("[data-history]").forEach(b =>
+        b.addEventListener("click", () => openHistoryModal(b.dataset.history)));
+      el.querySelectorAll("[data-purge]").forEach(b =>
+        b.addEventListener("click", () => openPurgeModal(b.dataset.purge)));
+      el.querySelectorAll("[data-purge-sign]").forEach(b =>
+        b.addEventListener("click", () => onSignPurge(b.dataset.purgeSign, true)));
+      el.querySelectorAll("[data-purge-decline]").forEach(b =>
+        b.addEventListener("click", () => onSignPurge(b.dataset.purgeDecline, false)));
       el.querySelectorAll("[data-child]").forEach(b =>
         b.addEventListener("click", () => { filterChild = b.dataset.child; render(); }));
       el.querySelectorAll("[data-cat]").forEach(b =>
@@ -272,34 +321,86 @@
 
       el.querySelectorAll("[data-edit]").forEach(b =>
         b.addEventListener("click", () => openRecordModal(records.find(r => r.id === b.dataset.edit))));
-      el.querySelectorAll("[data-del]").forEach(b =>
-        b.addEventListener("click", () => onDeleteRecord(b.dataset.del)));
+      el.querySelectorAll("[data-retire]").forEach(b =>
+        b.addEventListener("click", () => onRetireRecord(b.dataset.retire)));
     }
 
     function recordCard(r, today) {
       const cat = categoryFor(r.category);
       const status = expiryStatus(r, today);
-      const chip = status === "expired" || status === "soon"
+      const chip = status === "expired" || status === "soon" && !r.retired_at
         ? `<span class="chip chip-${status}">${esc(expiryLabel(r, today))}</span>` : "";
       const who = r.child_id ? memberName(r.child_id) : "Whole family";
       const size = r.size_bytes ? ` · ${esc(fmtBytes(r.size_bytes))}` : "";
+      const kept = versionsOf(r, recordVersions).length - 1;
+      const purge = purgeStateFor(r.id, purges);
 
       return `
         <div class="card">
           <div class="spread">
             <div>
               <div class="rec-title">${cat.icon} ${esc(r.title)}</div>
-              <div class="rec-meta">${esc(cat.label)} · ${esc(who)}${size}</div>
+              <div class="rec-meta">${esc(cat.label)} · ${esc(who)}${size}${
+                kept > 0 ? ` · v${esc(String(r.version ?? 1))}, ${kept} earlier version${kept === 1 ? "" : "s"} kept` : ""}</div>
             </div>
-            ${chip}
+            ${r.retired_at ? `<span class="chip chip-retired">Retired</span>` : chip}
           </div>
           ${r.note ? `<div class="rec-note">${esc(r.note)}</div>` : ""}
+          ${r.retired_at ? `<div class="rec-meta" style="margin-top:8px">Retired ${esc(String(r.retired_at).slice(0, 10))}${
+            r.retired_by ? ` by ${esc(memberName(r.retired_by))}` : ""}${r.retire_reason ? ` — ${esc(r.retire_reason)}` : ""}
+            · the file is still here</div>` : ""}
+          ${purge.state === "pending" ? `<div class="rec-meta" style="margin-top:8px">🕓 Permanent deletion proposed.
+            The record and its file stay until both parents agree.</div>` : ""}
           <div class="rec-actions">
             ${r.file_id ? `<a class="btn btn-sm" href="${esc(FILES.url(r.file_id))}" target="_blank" rel="noopener">Open file ↗</a>` : ""}
-            <button class="btn btn-sm" data-edit="${esc(r.id)}">Edit</button>
-            <button class="btn btn-sm btn-danger" data-del="${esc(r.id)}">Delete</button>
+            ${kept > 0 ? `<button class="btn btn-sm" data-history="${esc(r.id)}">History (${kept + 1})</button>` : ""}
+            ${canWrite() && !r.retired_at ? `<button class="btn btn-sm" data-edit="${esc(r.id)}">Replace</button>` : ""}
+            ${canWrite() && !r.retired_at ? `<button class="btn btn-sm btn-danger" data-retire="${esc(r.id)}">Retire</button>` : ""}
+            ${canWrite() && r.retired_at && purge.state === "none" && twoParty()
+              ? `<button class="btn btn-sm btn-danger" data-purge="${esc(r.id)}">Destroy for good…</button>` : ""}
           </div>
         </div>`;
+    }
+
+    /** Purge proposals still awaiting both signatures. Shown to every adult who
+     *  can see the record: whether THIS viewer still has to sign is the hub's
+     *  answer at the moment they click, not a stance this list can cache. */
+    function openPurges() {
+      return purges.filter(p => p.status === "pending");
+    }
+
+    function purgeBanner(p) {
+      return `
+        <div class="card" style="border-color:#fca5a5">
+          <strong>Destroy “${esc(p.record_title ?? "a record")}” permanently?</strong>
+          <div class="rec-meta" style="margin-top:4px">This deletes the record and its file for good, ahead of the
+            retention window. It takes both parents; if you are the one who proposed it, your agreement is already
+            recorded.</div>
+          ${p.reason ? `<div class="rec-note">${esc(p.reason)}</div>` : ""}
+          ${canWrite() ? `<div class="rec-actions">
+            <button class="btn btn-sm btn-danger" data-purge-sign="${esc(p.id)}">Agree to destroy</button>
+            <button class="btn btn-sm" data-purge-decline="${esc(p.id)}">Decline</button>
+          </div>` : ""}
+        </div>`;
+    }
+
+    /** True where there is a second parent household to countersign at all. In a
+     *  household install nobody can be asked, so the option is never offered —
+     *  the vault is an ordinary family document store there. */
+    function twoParty() {
+      return (window.__SPACE_KIND ?? null) === "coparenting";
+    }
+
+    /**
+     * Whether this member may write records here.
+     *
+     * A guess, and only ever used to decide what to RENDER: the hub resolves the
+     * live steward seating on every write and refuses there. Rendering a Replace
+     * button a supporting adult cannot use would be worse than not rendering it,
+     * but believing this instead of the hub would be worse still.
+     */
+    function canWrite() {
+      return canRead() && (!twoParty() || !!window.__IS_ADMIN);
     }
 
     // ── Child info view ──────────────────────────────────────────────────────
@@ -316,7 +417,12 @@
         return `
           <div class="card">
             <div class="spread">
-              <strong>${esc(kid.name)}</strong>
+              <div>
+                <strong>${esc(kid.name)}</strong>
+                ${info?.updated_by ? `<div class="rec-meta">Last changed by ${esc(memberName(info.updated_by))}${
+                  info.updated_at ? ` on ${esc(String(info.updated_at).slice(0, 10))}` : ""}${
+                  Number(info.version ?? 1) > 1 ? ` · v${esc(String(info.version))}` : ""}</div>` : ""}
+              </div>
               <button class="btn btn-sm" data-info="${esc(kid.id)}">${isChildInfoEmpty(info) ? "Add details" : "Edit"}</button>
             </div>
             ${groups.length ? groups.map(g => `
@@ -386,13 +492,14 @@
         <label class="field"><span>Notes</span>
           <textarea id="m-note" maxlength="2000" placeholder="Policy numbers, where the original lives, who has a copy…">${esc(existing?.note ?? "")}</textarea>
         </label>
-        ${CAN_UPLOAD && !existing?.file_id ? `
-          <label class="field"><span>Attach a file (optional)</span>
+        ${CAN_UPLOAD ? `
+          <label class="field"><span>${existing?.file_id ? "Replace the file (optional)" : "Attach a file (optional)"}</span>
             <input type="file" id="m-file"
                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
           </label>
           <p class="hint" id="m-file-status"></p>` : ""}
-        ${existing?.file_id ? `<p class="hint">A file is attached. Delete the record to replace it.</p>` : ""}
+        ${existing?.file_id ? `<p class="hint">A file is attached. Choosing a new one supersedes it — the version
+          you replace stays downloadable from this record\u2019s history.</p>` : ""}
         <div class="modal-actions">
           <button class="btn" id="m-cancel">Cancel</button>
           <button class="btn btn-primary" id="m-save">${existing ? "Save" : "Add record"}</button>
@@ -433,50 +540,44 @@
         child_id:   document.getElementById("m-child").value || null,
         expires_on: document.getElementById("m-expires").value || null,
         note:       document.getElementById("m-note").value.trim(),
-        file_id:    existing?.file_id ?? pendingFile?.id ?? null,
+        file_id:    pendingFile?.id ?? existing?.file_id ?? null,
       };
       const check = validateRecord(rec);
       if (!check.ok) { hubAlert(check.error); return; }
 
       btn.disabled = true; btn.textContent = "Saving…";
-      const now = new Date().toISOString();
       const uploaded = pendingFile;   // captured for rollback below
+      const values = {
+        ...rec,
+        record_kind: rec.file_id ? "document" : "reference",
+        mime_type:   uploaded?.mime ?? existing?.mime_type ?? null,
+        size_bytes:  uploaded?.size ?? existing?.size_bytes ?? null,
+      };
 
       try {
-        if (existing) {
-          if (!DEMO) {
-            await db(
-              `UPDATE ${P}records SET title=?, category=?, child_id=?, expires_on=?, note=?, updated_at=? WHERE id=?`,
-              [rec.title, rec.category, rec.child_id, rec.expires_on, rec.note, now, existing.id]
-            );
-          }
-          Object.assign(existing, rec, { updated_at: now });
+        if (DEMO) {
+          // no-op: the demo state is refreshed from the seed below
+        } else if (existing) {
+          // A replace, not an update: the hub copies the current row — the file
+          // it points at included — into the version table in the same
+          // transaction. `version` is the record as this tab last read it, so
+          // two parents editing at once get a 409 rather than one of the two
+          // versions they each meant to keep going missing.
+          await VERSIONED.replace("records", existing.id, values, existing.version ?? 1);
         } else {
-          const row = {
-            id: crypto.randomUUID(), ...rec,
-            record_kind: rec.file_id ? "document" : "reference",
-            mime_type: uploaded?.mime ?? null,
-            size_bytes: uploaded?.size ?? null,
-            created_by: me?.id ?? null, created_at: now, updated_at: now,
-          };
-          if (!DEMO) {
-            await db(
-              `INSERT INTO ${P}records (id, title, record_kind, category, child_id, note, expires_on, file_id, mime_type, size_bytes, created_by, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-              [row.id, row.title, row.record_kind, row.category, row.child_id, row.note,
-               row.expires_on, row.file_id, row.mime_type, row.size_bytes, row.created_by, row.created_at, row.updated_at]
-            );
-          }
-          records = [row, ...records];
+          await VERSIONED.create("records", values);
         }
         pendingFile = null;
         closeModal();
+        if (!DEMO) await loadData();
         render();
       } catch (e) {
         btn.disabled = false; btn.textContent = existing ? "Save" : "Add record";
-        // The file uploaded but no row references it — drop it rather than
-        // leaving an orphan counting against the storage quota.
-        if (!existing && uploaded) {
+        // The file uploaded but nothing references it — drop it rather than
+        // leave an orphan counting against the storage quota. Only ever the
+        // file THIS attempt uploaded: the record\u2019s existing file belongs to a
+        // version that is still in force.
+        if (uploaded) {
           FILES.delete(uploaded.id).catch(() => {});
           pendingFile = null;
         }
@@ -484,18 +585,122 @@
       }
     }
 
-    async function onDeleteRecord(id) {
+    async function onRetireRecord(id) {
       const rec = records.find(r => r.id === id);
       if (!rec) return;
-      if (!await hubConfirm(`Delete "${rec.title}"? This can't be undone.`)) return;
+      const ok = await hubConfirm(
+        `Retire “${rec.title}”? It comes out of the current list and its file is kept — nothing is destroyed.`,
+        { confirmLabel: "Retire" },
+      );
+      if (!ok) return;
       try {
-        if (!DEMO) await db(`DELETE FROM ${P}records WHERE id = ?`, [id]);
-        // Only after the row is gone, so a failed delete can't strand a row
-        // pointing at a file that no longer exists.
-        if (rec.file_id) FILES.delete(rec.file_id).catch(() => {});
-        records = records.filter(r => r.id !== id);
+        if (!DEMO) await VERSIONED.retire("records", id, rec.version ?? 1);
+        if (!DEMO) await loadData();
+        else { rec.retired_at = new Date().toISOString(); rec.retired_by = me?.id ?? null; }
         render();
       } catch (e) { hubAlert(e.message); }
+    }
+
+    // ── Destroying a record for good (both parents) ──────────────────────────
+    function openPurgeModal(id) {
+      const rec = records.find(r => r.id === id);
+      if (!rec) return;
+      const root = openModal(`
+        <h3>Destroy “${esc(rec.title)}” for good?</h3>
+        <p class="hint">This is the one thing here that cannot be undone: the record, every earlier version of it,
+          and the files behind them are deleted ahead of the retention window. It takes both parents — the other
+          parent sees this proposal and nothing happens until they agree.</p>
+        <label class="field"><span>Why (the other parent sees this)</span>
+          <textarea id="pg-reason" maxlength="500" data-autofocus
+                    placeholder="e.g. uploaded to the wrong child, or a duplicate of the signed copy"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button class="btn" id="pg-cancel">Cancel</button>
+          <button class="btn btn-primary btn-danger" id="pg-send">Propose deletion</button>
+        </div>
+      `);
+      root.querySelector("#pg-cancel").addEventListener("click", closeModal);
+      root.querySelector("#pg-send").addEventListener("click", async () => {
+        const btn = document.getElementById("pg-send");
+        btn.disabled = true; btn.textContent = "Sending…";
+        try {
+          if (!DEMO) {
+            const res = await fetch(`/run/${APP_ID}/api/propose-agreement`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                table: "record_purge_agreements",
+                values: {
+                  record_id: rec.id,
+                  record_title: rec.title,
+                  reason: document.getElementById("pg-reason").value.trim() || null,
+                },
+              }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json?.error ?? `Request failed: ${res.status}`);
+            // Proposing is not agreeing: the same countersignature path decides
+            // every lock, including the one-party case.
+            await signPurge(json.id, true);
+            await loadData();
+          }
+          closeModal();
+          render();
+        } catch (e) {
+          btn.disabled = false; btn.textContent = "Propose deletion";
+          hubAlert(e.message);
+        }
+      });
+    }
+
+    async function signPurge(id, agreed) {
+      const res = await fetch(`/run/${APP_ID}/api/agree`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table: "record_purge_agreements", id, agreed, resolution: !agreed }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `Request failed: ${res.status}`);
+      return json;
+    }
+
+    async function onSignPurge(id, agreed) {
+      const row = purges.find(p => p.id === id);
+      if (agreed && !await hubConfirm(
+        `Agree to destroy “${row?.record_title ?? "this record"}” for good? Once you both agree it cannot be recovered.`,
+        { confirmLabel: "Agree to destroy" },
+      )) return;
+      try {
+        await signPurge(id, agreed);
+        await loadData();
+        render();
+      } catch (e) { hubAlert(e.message); }
+    }
+
+    // ── History ──────────────────────────────────────────────────────────────
+    function openHistoryModal(id) {
+      const rec = records.find(r => r.id === id);
+      if (!rec) return;
+      const all = versionsOf(rec, recordVersions);
+      openModal(`
+        <h3>${esc(rec.title)} — history</h3>
+        <p class="hint">Every version this record has had. Replacing a document never removed the one it replaced,
+          so the earlier files are still here.</p>
+        ${all.map(v => `
+          <div class="card">
+            <div class="spread">
+              <div>
+                <div class="rec-title">v${esc(String(v.version ?? 1))}${v.current ? " · in force" : ""}</div>
+                <div class="rec-meta">${esc(v.title ?? "")}${v.category ? ` · ${esc(categoryFor(v.category).label)}` : ""}</div>
+                <div class="rec-meta">${v.current
+                  ? `Since ${esc(String(v.updated_at ?? v.created_at ?? "").slice(0, 10))}`
+                  : `Superseded ${esc(String(v.superseded_at ?? "").slice(0, 10))}${
+                      v.superseded_by ? ` by ${esc(memberName(v.superseded_by))}` : ""}`}</div>
+              </div>
+              ${v.file_id ? `<a class="btn btn-sm" href="${esc(FILES.url(v.file_id))}" target="_blank" rel="noopener">Open file ↗</a>` : ""}
+            </div>
+            ${v.note ? `<div class="rec-note">${esc(v.note)}</div>` : ""}
+          </div>`).join("")}
+        <div class="modal-actions"><button class="btn" id="h-close">Close</button></div>
+      `).querySelector("#h-close").addEventListener("click", closeModal);
     }
 
     // ── Child info editor ────────────────────────────────────────────────────
@@ -520,26 +725,30 @@
 
     async function onSaveChildInfo(childId) {
       const btn = document.getElementById("ci-save");
-      btn.disabled = true; btn.textContent = "Saving…";
-      const now = new Date().toISOString();
+      const existing = childInfo.get(childId);
       const values = Object.fromEntries(
         CHILD_INFO_FIELDS.map(f => [f.key, document.getElementById(`ci-${f.key}`).value.trim() || null]));
+      const changed = changedChildInfo(existing, values);
+      if (existing && Object.keys(changed).length === 0) { closeModal(); return; }
 
+      btn.disabled = true; btn.textContent = "Saving…";
       try {
         if (!DEMO) {
-          // child_id is the PRIMARY KEY, so one upsert covers create and edit
-          // without a read-then-branch race between the two parents.
-          const cols = CHILD_INFO_FIELDS.map(f => f.key);
-          await db(
-            `INSERT INTO ${P}child_info (child_id, ${cols.join(", ")}, updated_by, updated_at)
-             VALUES (${["?", ...cols.map(() => "?"), "?", "?"].join(",")})
-             ON CONFLICT(child_id) DO UPDATE SET
-               ${cols.map(c => `${c} = excluded.${c}`).join(", ")},
-               updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-            [childId, ...cols.map(c => values[c]), me?.id ?? null, now]
-          );
+          if (existing) {
+            // Versioned, never governed: any adult may edit sizes and phone
+            // numbers — countersigning a shoe size would kill the daily use this
+            // card exists for — but the card they replaced is kept, with the name
+            // of whoever changed it. That is what makes a step-parent's edit
+            // safe rather than dangerous.
+            await VERSIONED.replace("child_info", childId, changed, existing.version ?? 1);
+          } else {
+            await VERSIONED.create("child_info", { child_id: childId, ...values });
+          }
+          await loadData();
+        } else {
+          childInfo.set(childId, { child_id: childId, ...values, updated_by: me?.id ?? null,
+            updated_at: new Date().toISOString(), version: (existing?.version ?? 0) + 1 });
         }
-        childInfo.set(childId, { child_id: childId, ...values, updated_by: me?.id ?? null, updated_at: now });
         closeModal();
         render();
       } catch (e) {
