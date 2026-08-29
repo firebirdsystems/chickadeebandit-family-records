@@ -30,7 +30,8 @@
   },
   "storage": "db",
   "db_plaintext_columns": [
-    "expires_on"
+    "expires_on",
+    "record_kind"
   ],
   "row_policies": {
     "records": {

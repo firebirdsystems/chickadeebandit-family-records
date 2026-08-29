@@ -1,6 +1,6 @@
 {
   "name": "chickadeebandit-family-records",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Family records vault for the Chickadee Bandit hub",
   "type": "module",
   "scripts": {
