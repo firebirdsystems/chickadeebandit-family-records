@@ -1,6 +1,6 @@
 # Family Records
 
-Document vault and child info cards for [Chickadee Bandit](http://chickadeebandit.com).
+Document vault and child info cards for [Chickadee Bandit](https://chickadeebandit.com/app-library/family-records).
 
 Built for shared spaces as much as households: in a co-parenting space both
 parents are adults in the space, so both read and write everything here — the
