@@ -1,0 +1,173 @@
+{
+  "scenarios": [
+    {
+      "name": "records and the child info card are adults-only; a child reads none of it",
+      "members": {
+        "parent": "adult",
+        "kid": "child"
+      },
+      "steps": [
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, created_by, created_at, updated_at) VALUES ('r1', 'Custody agreement', 'document', 'legal', ?, ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+          "params": [
+            "{{kid}}",
+            "{{parent}}"
+          ]
+        },
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__child_info (child_id, allergies, doctor_name, updated_by, updated_at) VALUES (?, 'Peanuts', 'Dr. Lee', ?, '2026-01-01T00:00:00Z')",
+          "params": [
+            "{{kid}}",
+            "{{parent}}"
+          ]
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id FROM app_family_records__records",
+          "expect": {
+            "status": 403
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT child_id FROM app_family_records__child_info",
+          "expect": {
+            "status": 403
+          }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "SELECT id, title, category FROM app_family_records__records",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "r1",
+                "title": "Custody agreement",
+                "category": "legal"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "SELECT child_id, allergies FROM app_family_records__child_info",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "child_id": "scn-kid",
+                "allergies": "Peanuts"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "even an adult cannot write records or erase history through app SQL; edits go through the versioned endpoint",
+      "members": {
+        "parent": "adult"
+      },
+      "steps": [
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, created_by, created_at, updated_at) VALUES ('r1', 'Insurance card', 'document', 'insurance', ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+          "params": [
+            "{{parent}}"
+          ]
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, created_by, created_at, updated_at) VALUES ('r2', 'Forged', 'reference', 'other', ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+          "params": [
+            "{{parent}}"
+          ],
+          "expect": {
+            "status": 403,
+            "errorIncludes": "endpoint"
+          }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "UPDATE app_family_records__records SET title = 'Rewritten' WHERE id = 'r1'",
+          "expect": {
+            "status": 403,
+            "errorIncludes": "endpoint"
+          }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "DELETE FROM app_family_records__records WHERE id = 'r1'",
+          "expect": {
+            "status": 403,
+            "errorIncludes": "endpoint"
+          }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "SELECT id, title FROM app_family_records__records",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "r1",
+                "title": "Insurance card"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "purge consent cannot be forged through app SQL",
+      "members": {
+        "parent": "adult"
+      },
+      "steps": [
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__record_purge_agreements (id, household_a_id, household_b_id, household_a_agreed, household_b_agreed, status, record_id, updated_at) VALUES ('p1', 'hh-a', 'hh-b', 0, 0, 'pending', 'r1', '2026-01-01T00:00:00Z')"
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "UPDATE app_family_records__record_purge_agreements SET household_a_agreed = 1, household_b_agreed = 1, status = 'agreed' WHERE id = 'p1'",
+          "expect": {
+            "status": 403,
+            "errorIncludes": "endpoint"
+          }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "SELECT id, status, household_b_agreed FROM app_family_records__record_purge_agreements",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "p1",
+                "status": "pending",
+                "household_b_agreed": 0
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
