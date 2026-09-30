@@ -168,6 +168,197 @@
           }
         }
       ]
+    },
+    {
+      "name": "in a shared space no one, the steward included, can rewrite, delete or backdate a superseded record version or child-info card through app SQL, and both still read the history",
+      "context": "shared_space",
+      "members": { "a": "adult", "steward": "admin" },
+      "steps": [
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, file_id, version, created_by, created_at, updated_at) VALUES ('r1', 'Custody agreement (amended)', 'document', 'legal', 'file-v2', 2, ?, '2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z')",
+          "params": ["{{steward}}"]
+        },
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__record_versions (id, record_id, version, superseded_at, superseded_by, title, record_kind, category, file_id, created_by, created_at, updated_at) VALUES ('rv1', 'r1', 1, '2026-02-01T00:00:00Z', ?, 'Custody agreement', 'document', 'legal', 'file-v1', ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+          "params": ["{{steward}}", "{{a}}"]
+        },
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__child_info (child_id, allergies, version, updated_by, updated_at) VALUES ('child-1', 'Peanuts, penicillin', 2, ?, '2026-02-01T00:00:00Z')",
+          "params": ["{{steward}}"]
+        },
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__child_info_versions (id, child_id, version, superseded_at, superseded_by, allergies, updated_by, updated_at) VALUES ('cv1', 'child-1', 1, '2026-02-01T00:00:00Z', ?, 'Peanuts', ?, '2026-01-01T00:00:00Z')",
+          "params": ["{{steward}}", "{{a}}"]
+        },
+        {
+          "comment": "The file the old version carried is the point of keeping it; nobody can repoint or drop it.",
+          "action": "db",
+          "as": "steward",
+          "sql": "UPDATE app_family_records__record_versions SET file_id = NULL, title = 'Nothing to see' WHERE id = 'rv1'",
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "action": "db",
+          "as": "a",
+          "sql": "DELETE FROM app_family_records__record_versions WHERE record_id = 'r1'",
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "comment": "Backdating superseded_at would hand the version to the retention sweep early.",
+          "action": "db",
+          "as": "steward",
+          "sql": "UPDATE app_family_records__record_versions SET superseded_at = '2000-01-01T00:00:00Z' WHERE id = 'rv1'",
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "action": "db",
+          "as": "a",
+          "sql": "INSERT INTO app_family_records__record_versions (id, record_id, version, superseded_at, title, file_id) VALUES ('rv-forged', 'r1', 1, '2026-01-15T00:00:00Z', 'Forged earlier version', 'file-forged')",
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "action": "db",
+          "as": "a",
+          "sql": "UPDATE app_family_records__child_info_versions SET allergies = 'None', updated_by = ? WHERE id = 'cv1'",
+          "params": ["{{steward}}"],
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "action": "db",
+          "as": "steward",
+          "sql": "DELETE FROM app_family_records__child_info_versions WHERE child_id = 'child-1'",
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "action": "db",
+          "as": "steward",
+          "sql": "INSERT INTO app_family_records__child_info_versions (id, child_id, version, superseded_at, allergies) VALUES ('cv-forged', 'child-1', 1, '2026-01-15T00:00:00Z', 'None')",
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "action": "db",
+          "as": "a",
+          "sql": "SELECT id, version, title, file_id, superseded_at, created_by FROM app_family_records__record_versions",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "rv1",
+                "version": 1,
+                "title": "Custody agreement",
+                "file_id": "file-v1",
+                "superseded_at": "2026-02-01T00:00:00Z",
+                "created_by": "scn-a"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "steward",
+          "sql": "SELECT id, allergies, updated_by FROM app_family_records__child_info_versions",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [{ "id": "cv1", "allergies": "Peanuts", "updated_by": "scn-a" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "a purge proposal can be raised, edited or withdrawn only through the agreement endpoint; adults read it and a child granted the app reads no history or purge",
+      "members": { "parent": "adult", "kid": "child" },
+      "granted": ["kid"],
+      "steps": [
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__record_purges (id, household_a_id, household_b_id, record_id, record_title, reason, proposed_by, created_at, updated_at) VALUES ('pp1', 'hh-a', 'hh-b', 'r1', 'Old insurance card', 'expired plan', ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+          "params": ["{{parent}}"]
+        },
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__record_versions (id, record_id, version, superseded_at, title, file_id) VALUES ('rv1', 'r1', 1, '2026-02-01T00:00:00Z', 'Old insurance card', 'file-v1')"
+        },
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_family_records__child_info_versions (id, child_id, version, superseded_at, allergies) VALUES ('cv1', ?, 1, '2026-02-01T00:00:00Z', 'Peanuts')",
+          "params": ["{{kid}}"]
+        },
+        {
+          "comment": "A proposal forged in SQL could name the wrong household pair or skip max_open.",
+          "action": "db",
+          "as": "parent",
+          "sql": "INSERT INTO app_family_records__record_purges (id, household_a_id, household_b_id, record_id, reason, proposed_by, created_at) VALUES ('pp-forged', 'hh-a', NULL, 'r1', 'solo purge', ?, '2026-01-02T00:00:00Z')",
+          "params": ["{{parent}}"],
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "comment": "The terms the other household is asked to countersign cannot be swapped out under them.",
+          "action": "db",
+          "as": "parent",
+          "sql": "UPDATE app_family_records__record_purges SET record_id = 'r-other', record_title = 'Custody agreement' WHERE id = 'pp1'",
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "DELETE FROM app_family_records__record_purges WHERE id = 'pp1'",
+          "expect": { "status": 403, "errorIncludes": "endpoint" }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "SELECT id, record_id, record_title, reason, proposed_by FROM app_family_records__record_purges",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "pp1",
+                "record_id": "r1",
+                "record_title": "Old insurance card",
+                "reason": "expired plan",
+                "proposed_by": "scn-parent"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id FROM app_family_records__record_purges",
+          "expect": { "status": 403, "errorIncludes": "adult" }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id FROM app_family_records__record_versions",
+          "expect": { "status": 403, "errorIncludes": "adult" }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id FROM app_family_records__child_info_versions",
+          "expect": { "status": 403, "errorIncludes": "adult" }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "DELETE FROM app_family_records__record_versions",
+          "expect": { "status": 403 }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "SELECT id FROM app_family_records__record_versions",
+          "expect": { "status": 200, "rowCount": 1, "rowsContain": [{ "id": "rv1" }] }
+        }
+      ]
     }
   ]
 }
