@@ -4,12 +4,12 @@
 // that format and avoids the timezone shifts a Date round-trip introduces.
 
 export const CATEGORIES = [
-  { id: "legal",     label: "Legal",      icon: "⚖️" },
-  { id: "medical",   label: "Medical",    icon: "🩺" },
-  { id: "school",    label: "School",     icon: "🎒" },
-  { id: "insurance", label: "Insurance",  icon: "🛡️" },
-  { id: "identity",  label: "Identity",   icon: "🪪" },
-  { id: "other",     label: "Other",      icon: "📄" },
+  { id: "legal",     label: "Legal",      glyph: "gavel" },
+  { id: "medical",   label: "Medical",    glyph: "stethoscope" },
+  { id: "school",    label: "School",     glyph: "graduation" },
+  { id: "insurance", label: "Insurance",  glyph: "shield" },
+  { id: "identity",  label: "Identity",   glyph: "contact-card" },
+  { id: "other",     label: "Other",      glyph: "document" },
 ];
 
 export function categoryFor(id) {

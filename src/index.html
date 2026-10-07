@@ -28,7 +28,7 @@
     .spread { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
     .muted { color: var(--hub-text-muted, #6b7280); font-size: 0.85rem; }
     .empty { text-align: center; color: var(--hub-text-muted, #6b7280); padding: 40px 16px; }
-    .empty-icon { font-size: 2.2rem; display: block; margin-bottom: 8px; }
+    .empty-icon { display: block; margin-bottom: 12px; }
 
     .btn { border: 1px solid var(--hub-border, #d1d5db); background: var(--hub-surface, #fff); color: var(--hub-text, #000000);
       padding: 7px 12px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; }
@@ -86,7 +86,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>🗂️ Family Records</h1>
+    <h1><span id="page-glyph"></span> Family Records</h1>
     <p class="sub">The paperwork and the details that travel with a child — in one place both homes can reach.</p>
     <div id="tabs" class="tabs"></div>
     <div id="content"></div>
@@ -95,13 +95,16 @@
   <script type="module">
     import {
       esc, isAdult, hubConfirm, hubAlert, createFilesHelper, searchMatch,
-      createVersionedRecordsHelper, hubToday,
+      createVersionedRecordsHelper, hubToday, glyph, chickadee,
     } from "/hub-sdk.js";
     import {
       CATEGORIES, categoryFor, expiryStatus, expiryLabel, visibleRecords,
       validateRecord, CHILD_INFO_FIELDS, groupedChildInfo, isChildInfoEmpty, fmtBytes, searchableFields,
       liveRecords, retiredRecords, versionsOf, purgeStateFor, changedChildInfo,
     } from "./logic.js";
+
+    // The page heading is static markup; its mark comes from the SDK.
+    document.getElementById("page-glyph").innerHTML = glyph("archive");
 
     // ── Runtime globals ──────────────────────────────────────────────────────
     const CONTEXT = window.__CONTEXT_URL ?? "";
@@ -241,19 +244,19 @@
     // ══════════════════════════════════════════════════════════════════════════
     // Rendering
     // ══════════════════════════════════════════════════════════════════════════
-    const TABS = [["records", "🗂️ Records"], ["children", "🧒 Child info"]];
+    const TABS = [["records", "archive", "Records"], ["children", "people", "Child info"]];
 
     function render() {
       const tabsEl = document.getElementById("tabs");
-      tabsEl.innerHTML = TABS.map(([id, label]) =>
-        `<button class="tab ${view === id ? "active" : ""}" data-tab="${id}">${esc(label)}</button>`
+      tabsEl.innerHTML = TABS.map(([id, mark, label]) =>
+        `<button class="tab ${view === id ? "active" : ""}" data-tab="${id}">${glyph(mark)} ${esc(label)}</button>`
       ).join("");
       tabsEl.querySelectorAll("[data-tab]").forEach(b =>
         b.addEventListener("click", () => { view = b.dataset.tab; render(); }));
 
       const el = document.getElementById("content");
       if (!canRead()) {
-        el.innerHTML = `<div class="empty"><span class="empty-icon">🔒</span>
+        el.innerHTML = `<div class="empty"><span class="empty-icon">${chickadee("locked")}</span>
           Family Records is available to adults in this household.</div>`;
         return;
       }
@@ -274,9 +277,9 @@
         .map(([id, label]) =>
           `<button class="pill ${filterChild === id ? "active" : ""}" data-child="${esc(id)}">${esc(label)}</button>`)
         .join("");
-      const catPills = [["all", "All"], ...CATEGORIES.map(c => [c.id, `${c.icon} ${c.label}`])]
-        .map(([id, label]) =>
-          `<button class="pill ${filterCategory === id ? "active" : ""}" data-cat="${esc(id)}">${esc(label)}</button>`)
+      const catPills = [["all", "All"], ...CATEGORIES.map(c => [c.id, c.label, c.glyph])]
+        .map(([id, label, mark]) =>
+          `<button class="pill ${filterCategory === id ? "active" : ""}" data-cat="${esc(id)}">${mark ? `${glyph(mark)} ` : ""}${esc(label)}</button>`)
         .join("");
 
       el.innerHTML = `
@@ -291,7 +294,7 @@
         <div class="pills">${childPills}</div>
         <div class="pills">${catPills}</div>
         ${shown.length ? shown.map(r => recordCard(r, today)).join("") : `
-          <div class="empty"><span class="empty-icon">🗂️</span>
+          <div class="empty"><span class="empty-icon">${chickadee("nest")}</span>
             ${records.length ? "Nothing matches those filters." : "No records yet. Add the custody agreement, an insurance card, or a school form."}
           </div>`}
       `;
@@ -343,7 +346,7 @@
         <div class="card">
           <div class="spread">
             <div>
-              <div class="rec-title">${cat.icon} ${esc(r.title)}</div>
+              <div class="rec-title">${glyph(cat.glyph)} ${esc(r.title)}</div>
               <div class="rec-meta">${esc(cat.label)} · ${esc(who)}${size}${
                 kept > 0 ? ` · v${esc(String(r.version ?? 1))}, ${kept} earlier version${kept === 1 ? "" : "s"} kept` : ""}</div>
             </div>
@@ -353,7 +356,7 @@
           ${r.retired_at ? `<div class="rec-meta" style="margin-top:8px">Retired ${esc(String(r.retired_at).slice(0, 10))}${
             r.retired_by ? ` by ${esc(memberName(r.retired_by))}` : ""}${r.retire_reason ? ` — ${esc(r.retire_reason)}` : ""}
             · the file is still here</div>` : ""}
-          ${purge.state === "pending" ? `<div class="rec-meta" style="margin-top:8px">🕓 Permanent deletion proposed.
+          ${purge.state === "pending" ? `<div class="rec-meta" style="margin-top:8px">${glyph("hourglass")} Permanent deletion proposed.
             The record and its file stay until both parents agree.</div>` : ""}
           <div class="rec-actions">
             ${r.file_id ? `<a class="btn btn-sm" href="${esc(FILES.url(r.file_id))}" target="_blank" rel="noopener">Open file ↗</a>` : ""}
@@ -411,7 +414,7 @@
     function renderChildren(el) {
       const kids = children();
       if (!kids.length) {
-        el.innerHTML = `<div class="empty"><span class="empty-icon">🧒</span>
+        el.innerHTML = `<div class="empty"><span class="empty-icon">${chickadee("nest")}</span>
           No children in this household yet.</div>`;
         return;
       }
@@ -483,7 +486,7 @@
         <div class="field-row">
           <label class="field"><span>Category</span>
             <select id="m-cat">
-              ${CATEGORIES.map(c => `<option value="${esc(c.id)}" ${(existing?.category ?? "other") === c.id ? "selected" : ""}>${c.icon} ${esc(c.label)}</option>`).join("")}
+              ${CATEGORIES.map(c => `<option value="${esc(c.id)}" ${(existing?.category ?? "other") === c.id ? "selected" : ""}>${esc(c.label)}</option>`).join("")}
             </select>
           </label>
           <label class="field"><span>Applies to</span>
