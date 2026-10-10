@@ -1,0 +1,378 @@
+{
+  "seed": [
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','+21 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-300 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 days'), ?)",
+      "params": [
+        "pr-0",
+        "Home insurance policy",
+        "reference",
+        "insurance",
+        "Policy HO-4471882 with Lakeshore Mutual. Agent is Priya, 555-0133.",
+        "{{me}}",
+        2
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','-6 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-340 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 days'), ?)",
+      "params": [
+        "pr-1",
+        "Auto insurance, Subaru",
+        "reference",
+        "insurance",
+        "Policy AU-2210934. Card is in the glove box.",
+        "{{me}}",
+        3
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','+160 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-200 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-8 days'), ?)",
+      "params": [
+        "pr-2",
+        "Passport",
+        "reference",
+        "identity",
+        "In the fireproof box in the hall closet.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','+38 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-180 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-11 days'), ?)",
+      "params": [
+        "pr-3",
+        "Driver's license",
+        "reference",
+        "identity",
+        "Renew online, needs a new photo this time.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-400 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-14 days'), ?)",
+      "params": [
+        "pr-4",
+        "Will and estate plan",
+        "reference",
+        "legal",
+        "Signed originals are with the attorney, Harmon and Reid.",
+        "{{me}}",
+        2
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-500 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-17 days'), ?)",
+      "params": [
+        "pr-5",
+        "Mortgage closing documents",
+        "reference",
+        "legal",
+        "Scanned copy in the shared drive under House.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','+83 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-90 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 days'), ?)",
+      "params": [
+        "pr-6",
+        "Health insurance card",
+        "reference",
+        "insurance",
+        "Member ID 88213-C, group 4471. Family plan.",
+        "{{me}}",
+        2
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-25 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-23 days'), ?)",
+      "params": [
+        "pr-7",
+        "Vaccination record",
+        "reference",
+        "medical",
+        "Flu shot done this fall. Tetanus booster due in 2029.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','+12 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-150 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-26 days'), ?)",
+      "params": [
+        "pr-8",
+        "Vehicle registration, Subaru",
+        "reference",
+        "other",
+        "Sticker goes on the rear plate.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-60 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-29 days'), ?)",
+      "params": [
+        "pr-9",
+        "Property tax statement",
+        "reference",
+        "other",
+        "Second installment paid.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-45 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-32 days'), ?)",
+      "params": [
+        "pr-10",
+        "Dental plan summary",
+        "reference",
+        "medical",
+        "Two cleanings a year covered, orthodontia at half.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days'), ?)",
+      "params": [
+        "pr-11",
+        "School district enrollment proof",
+        "reference",
+        "school",
+        "Utility bill and lease copy were accepted.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-420 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-38 days'), ?)",
+      "params": [
+        "pr-12",
+        "Social Security card",
+        "reference",
+        "identity",
+        "Do not carry. Stored in the fireproof box.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-260 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-41 days'), ?)",
+      "params": [
+        "pr-13",
+        "Life insurance policy",
+        "reference",
+        "insurance",
+        "Term policy LT-5502917, beneficiary details on page 2.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','+30 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-335 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-44 days'), ?)",
+      "params": [
+        "pr-14",
+        "Pet license, Biscuit",
+        "reference",
+        "other",
+        "County tag number 20417. Rabies certificate attached at the vet.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-410 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-47 days'), ?)",
+      "params": [
+        "pr-15",
+        "Birth certificate",
+        "reference",
+        "identity",
+        "Certified copy. Original is in the safe deposit box.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-410 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-50 days'), ?)",
+      "params": [
+        "pr-16",
+        "Marriage certificate",
+        "reference",
+        "legal",
+        "Certified copy from the county clerk.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-220 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-53 days'), ?)",
+      "params": [
+        "pr-17",
+        "Car title, Subaru",
+        "reference",
+        "legal",
+        "Lien released. Keep with the registration paperwork.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','+200 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-165 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-56 days'), ?)",
+      "params": [
+        "pr-18",
+        "Eye prescription",
+        "reference",
+        "medical",
+        "Left -2.25, right -2.00. Exam was at Valley Vision.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-95 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-59 days'), ?)",
+      "params": [
+        "pr-19",
+        "HOA membership and bylaws",
+        "reference",
+        "other",
+        "Dues are paid quarterly. Contact is the Maple Court board.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','+5 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-360 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-62 days'), ?)",
+      "params": [
+        "pr-20",
+        "Roadside assistance membership",
+        "reference",
+        "other",
+        "Member number 6204 118 553. Covers both cars.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-450 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-65 days'), ?)",
+      "params": [
+        "pr-21",
+        "Safe deposit box agreement",
+        "reference",
+        "other",
+        "Box 214 at First Community Bank. Two keys, one in the desk.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version) VALUES (?, ?, ?, ?, NULL, ?, date('now','+70 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 days'), ?)",
+      "params": [
+        "pr-22",
+        "Flexible spending account summary",
+        "reference",
+        "insurance",
+        "Use remaining balance before the plan year ends.",
+        "{{me}}",
+        1
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version, retired_at, retired_by, retire_reason) VALUES (?, ?, ?, ?, NULL, ?, date('now','-40 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-380 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-71 days'), ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-10 days'), ?, ?)",
+      "params": [
+        "pr-23",
+        "Home warranty contract",
+        "reference",
+        "insurance",
+        "Covered appliances listed on page 3.",
+        "{{me}}",
+        1,
+        "{{me}}",
+        "Lapsed, not renewing"
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__records (id, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at, version, retired_at, retired_by, retire_reason) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-700 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-74 days'), ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-55 days'), ?, ?)",
+      "params": [
+        "pr-24",
+        "Old apartment lease",
+        "reference",
+        "legal",
+        "Kept for the deposit dispute.",
+        "{{me}}",
+        1,
+        "{{me}}",
+        "No longer needed"
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__record_versions (id, record_id, version, superseded_at, superseded_by, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 days'), ?, ?, ?, ?, NULL, ?, date('now','-20 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-200 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-200 days'))",
+      "params": [
+        "pr-v0",
+        "pr-0",
+        1,
+        "{{me}}",
+        "Home insurance policy",
+        "reference",
+        "insurance",
+        "Policy HO-4471882. Previous term.",
+        "{{me}}"
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__record_versions (id, record_id, version, superseded_at, superseded_by, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-200 days'), ?, ?, ?, ?, NULL, ?, date('now','-200 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-380 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-380 days'))",
+      "params": [
+        "pr-v1",
+        "pr-1",
+        1,
+        "{{me}}",
+        "Auto insurance, Honda",
+        "reference",
+        "insurance",
+        "Policy AU-1187220. Sold the Honda.",
+        "{{me}}"
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__record_versions (id, record_id, version, superseded_at, superseded_by, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-28 days'), ?, ?, ?, ?, NULL, ?, date('now','-28 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-208 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-208 days'))",
+      "params": [
+        "pr-v2",
+        "pr-1",
+        2,
+        "{{me}}",
+        "Auto insurance, Subaru",
+        "reference",
+        "insurance",
+        "Policy AU-2210934. Six month term.",
+        "{{me}}"
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__record_versions (id, record_id, version, superseded_at, superseded_by, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-120 days'), ?, ?, ?, ?, NULL, ?, NULL, NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-300 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-300 days'))",
+      "params": [
+        "pr-v3",
+        "pr-4",
+        1,
+        "{{me}}",
+        "Will (draft)",
+        "reference",
+        "legal",
+        "Draft before the attorney review.",
+        "{{me}}"
+      ]
+    },
+    {
+      "sql": "INSERT INTO app_family_records__record_versions (id, record_id, version, superseded_at, superseded_by, title, record_kind, category, child_id, note, expires_on, file_id, created_by, created_at, updated_at) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-14 days'), ?, ?, ?, ?, NULL, ?, date('now','-14 days'), NULL, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-194 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-194 days'))",
+      "params": [
+        "pr-v4",
+        "pr-6",
+        1,
+        "{{me}}",
+        "Health insurance card",
+        "reference",
+        "insurance",
+        "Member ID 77102-A. Old employer plan.",
+        "{{me}}"
+      ]
+    }
+  ]
+}

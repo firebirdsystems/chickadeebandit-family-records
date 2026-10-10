@@ -337,5 +337,22 @@
     "max_db_bytes": 52428800,
     "max_file_bytes": 20971520,
     "max_files_bytes": 524288000
+  },
+  "preload": {
+    "records": {
+      "sql": "SELECT * FROM app_family_records__records"
+    },
+    "child_info": {
+      "sql": "SELECT * FROM app_family_records__child_info"
+    },
+    "record_versions": {
+      "sql": "SELECT * FROM app_family_records__record_versions ORDER BY superseded_at DESC"
+    },
+    "child_info_versions": {
+      "sql": "SELECT * FROM app_family_records__child_info_versions ORDER BY superseded_at DESC"
+    },
+    "record_purge_agreements": {
+      "sql": "SELECT * FROM app_family_records__record_purge_agreements ORDER BY updated_at DESC"
+    }
   }
 }

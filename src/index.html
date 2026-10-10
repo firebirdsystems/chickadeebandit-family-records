@@ -184,14 +184,17 @@
     async function loadData() {
       if (DEMO) { seedDemo(); return; }
       if (!canRead()) { records = []; childInfo = new Map(); return; }
+      // Written out in full, not built from P: manifest.preload declares these
+      // five, and the hub answers one from the document only when this text is
+      // exactly the manifest's.
       const [recs, info, recVersions, infoVers, purgeRows] = await Promise.all([
-        db(`SELECT * FROM ${P}records`).catch(() => ({ rows: [] })),
-        db(`SELECT * FROM ${P}child_info`).catch(() => ({ rows: [] })),
+        db("SELECT * FROM app_family_records__records").catch(() => ({ rows: [] })),
+        db("SELECT * FROM app_family_records__child_info").catch(() => ({ rows: [] })),
         // Superseded versions carry the file id of the document they held, so
         // the history list can still link straight to the bytes.
-        db(`SELECT * FROM ${P}record_versions ORDER BY superseded_at DESC`).catch(() => ({ rows: [] })),
-        db(`SELECT * FROM ${P}child_info_versions ORDER BY superseded_at DESC`).catch(() => ({ rows: [] })),
-        db(`SELECT * FROM ${P}record_purge_agreements ORDER BY updated_at DESC`).catch(() => ({ rows: [] })),
+        db("SELECT * FROM app_family_records__record_versions ORDER BY superseded_at DESC").catch(() => ({ rows: [] })),
+        db("SELECT * FROM app_family_records__child_info_versions ORDER BY superseded_at DESC").catch(() => ({ rows: [] })),
+        db("SELECT * FROM app_family_records__record_purge_agreements ORDER BY updated_at DESC").catch(() => ({ rows: [] })),
       ]);
       records = recs.rows;
       childInfo = new Map(info.rows.map(r => [r.child_id, r]));
@@ -529,9 +532,16 @@
 
       if (status) status.textContent = "Uploading…";
       try {
-        const { id } = await FILES.upload(file);
-        pendingFile = { id, name: file.name, mime: file.type, size: file.size };
-        if (status) status.textContent = `✓ ${file.name} attached`;
+        const uploaded = await FILES.upload(file);
+        // The hub says what it stored, which is not always what was picked:
+        // a HEIC photo is kept as a JPEG, under another name, type and size.
+        pendingFile = {
+          id: uploaded.id,
+          name: uploaded.name ?? file.name,
+          mime: uploaded.mimeType ?? file.type,
+          size: uploaded.sizeBytes ?? file.size,
+        };
+        if (status) status.textContent = `✓ ${pendingFile.name} attached`;
       } catch (e) {
         if (input) input.value = "";
         if (status) status.textContent = "";
