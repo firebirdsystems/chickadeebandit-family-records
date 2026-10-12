@@ -570,7 +570,10 @@
       } catch (e) {
         if (input) input.value = "";
         if (status) status.textContent = "";
-        hubAlert(`Could not attach that file: ${e.message}`);
+        // A refusal the hub explains (too large, wrong type, too many, storage
+        // full) is shown in its words; anything else gets the fixed line.
+        console.error("[family-records] upload failed:", e);
+        hubAlert([413, 415, 429, 507].includes(e?.status) ? `Could not attach that file: ${e.message}` : "Couldn’t attach that file — try again.");
       }
     }
 
@@ -679,7 +682,7 @@
               }),
             });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(json?.error ?? `Request failed: ${res.status}`);
+            if (!res.ok) throw agreementError(res, json);
             // Proposing is not agreeing: the same countersignature path decides
             // every lock, including the one-party case.
             await signPurge(json.id, true);
@@ -689,7 +692,7 @@
           render();
         } catch (e) {
           btn.disabled = false; btn.textContent = "Propose deletion";
-          hubAlert(e.message);
+          hubAlert(failText(e, "Couldn’t send the proposal — try again."));
         }
       });
     }
@@ -700,8 +703,19 @@
         body: JSON.stringify({ table: "record_purge_agreements", id, agreed, resolution: !agreed }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error ?? `Request failed: ${res.status}`);
+      if (!res.ok) throw agreementError(res, json);
       return json;
+    }
+
+    // A 409 is the hub refusing for a reason the parent can act on (the record
+    // or the proposal changed underneath them), so its wording is shown. Any
+    // other failure shows one fixed line and goes to the console.
+    function agreementError(res, json) {
+      return Object.assign(new Error(json?.error ?? `Request failed: ${res.status}`), { forUser: res.status === 409 && !!json?.error });
+    }
+    function failText(e, line) {
+      if (!e?.forUser) console.error("[family-records] write failed:", e);
+      return e?.forUser ? e.message : line;
     }
 
     async function onSignPurge(id, agreed) {
@@ -714,7 +728,7 @@
         await signPurge(id, agreed);
         await loadData();
         render();
-      } catch (e) { hubAlert(e.message); }
+      } catch (e) { hubAlert(failText(e, "Couldn’t save your answer — try again.")); }
     }
 
     // ── History ──────────────────────────────────────────────────────────────
