@@ -82,6 +82,12 @@
       max-width: 480px; width: 100%; max-height: 90vh; overflow-y: auto; }
     .modal h3 { margin: 0 0 14px; }
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+
+    .load-error { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px;
+      background: var(--hub-tint-danger, #fee2e2); color: var(--hub-tint-danger-fg, #b91c1c);
+      font-size: 0.9rem; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+    .load-error-retry { background: none; border: 1px solid currentColor; border-radius: 8px;
+      padding: 4px 10px; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -126,8 +132,9 @@
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sql, params }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `DB error ${res.status}`);
-      return res.json();
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json || typeof json !== "object" || json.error) throw new Error(json?.error || "Couldn’t reach the hub. Try again.");
+      return json;
     }
 
     /** Today in the VIEWER's local date — never toISOString(), which is UTC. */
@@ -145,6 +152,8 @@
     let members = [], memberMap = new Map();
     let records = [], childInfo = new Map();   // child_id → info row
     let recordVersions = [], infoVersions = [], purges = [];
+    let loadFailed = false;                     // the last loadData missed at least one read
+    let rosterFailed = false;                   // the member list could not be read, so nobody's role is known
     // Which side of a two-parent agreement this member signs for, or null in a
     // household install where there is no second party at all. Derived from the
     // pending rows themselves — the app never sees household ids.
@@ -174,10 +183,10 @@
         memberMap = new Map(members.map(m => [m.id, m]));
         return;
       }
-      try {
-        const res = await fetch(`${CONTEXT}?keys=family.members`);
-        members = ((await res.json())["family.members"]) ?? [];
-      } catch { members = []; }
+      const res = await fetch(`${CONTEXT}?keys=family.members`);
+      const ctx = await res.json().catch(() => null);
+      if (!res.ok || !ctx || typeof ctx !== "object" || ctx.$errors?.length) throw new Error("Couldn’t reach the hub. Try again.");
+      members = ctx["family.members"] ?? [];
       memberMap = new Map(members.map(m => [m.id, m]));
     }
 
@@ -187,20 +196,24 @@
       // Written out in full, not built from P: manifest.preload declares these
       // five, and the hub answers one from the document only when this text is
       // exactly the manifest's.
+      // A read that fails keeps what the page already holds for that table and
+      // is counted, so a failed load is never drawn as "no records".
+      loadFailed = false;
+      const kept = () => { loadFailed = true; return null; };
       const [recs, info, recVersions, infoVers, purgeRows] = await Promise.all([
-        db("SELECT * FROM app_family_records__records").catch(() => ({ rows: [] })),
-        db("SELECT * FROM app_family_records__child_info").catch(() => ({ rows: [] })),
+        db("SELECT * FROM app_family_records__records").catch(kept),
+        db("SELECT * FROM app_family_records__child_info").catch(kept),
         // Superseded versions carry the file id of the document they held, so
         // the history list can still link straight to the bytes.
-        db("SELECT * FROM app_family_records__record_versions ORDER BY superseded_at DESC").catch(() => ({ rows: [] })),
-        db("SELECT * FROM app_family_records__child_info_versions ORDER BY superseded_at DESC").catch(() => ({ rows: [] })),
-        db("SELECT * FROM app_family_records__record_purge_agreements ORDER BY updated_at DESC").catch(() => ({ rows: [] })),
+        db("SELECT * FROM app_family_records__record_versions ORDER BY superseded_at DESC").catch(kept),
+        db("SELECT * FROM app_family_records__child_info_versions ORDER BY superseded_at DESC").catch(kept),
+        db("SELECT * FROM app_family_records__record_purge_agreements ORDER BY updated_at DESC").catch(kept),
       ]);
-      records = recs.rows;
-      childInfo = new Map(info.rows.map(r => [r.child_id, r]));
-      recordVersions = recVersions.rows;
-      infoVersions = infoVers.rows;
-      purges = purgeRows.rows;
+      if (recs) records = recs.rows;
+      if (info) childInfo = new Map(info.rows.map(r => [r.child_id, r]));
+      if (recVersions) recordVersions = recVersions.rows;
+      if (infoVers) infoVersions = infoVers.rows;
+      if (purgeRows) purges = purgeRows.rows;
     }
 
     function seedDemo() {
@@ -258,12 +271,24 @@
         b.addEventListener("click", () => { view = b.dataset.tab; render(); }));
 
       const el = document.getElementById("content");
+      const banner = `<div class="load-error" data-testid="load-error" role="alert"><span>Couldn’t load the family records.</span> <button type="button" class="load-error-retry" data-testid="load-retry">Try again</button></div>`;
+      // Without the member list the adults-only notice below would be a guess.
+      if (rosterFailed) {
+        el.innerHTML = banner;
+        el.querySelector('[data-testid="load-retry"]').addEventListener("click", start);
+        return;
+      }
       if (!canRead()) {
         el.innerHTML = `<div class="empty"><span class="empty-icon">${chickadee("locked")}</span>
           Family Records is available to adults in this household.</div>`;
         return;
       }
       (view === "children" ? renderChildren : renderRecords)(el);
+      // A read that failed stays announced above the view until one succeeds.
+      if (loadFailed) {
+        el.insertAdjacentHTML("afterbegin", banner);
+        el.querySelector('[data-testid="load-retry"]').addEventListener("click", start);
+      }
     }
 
     // ── Records view ─────────────────────────────────────────────────────────
@@ -296,7 +321,7 @@
         ${openPurges().map(purgeBanner).join("")}
         <div class="pills">${childPills}</div>
         <div class="pills">${catPills}</div>
-        ${shown.length ? shown.map(r => recordCard(r, today)).join("") : `
+        ${shown.length ? shown.map(r => recordCard(r, today)).join("") : loadFailed && !records.length ? "" : `
           <div class="empty"><span class="empty-icon">${chickadee("nest")}</span>
             ${records.length ? "Nothing matches those filters." : "No records yet. Add the custody agreement, an insurance card, or a school form."}
           </div>`}
@@ -775,11 +800,13 @@
     }
 
     // ── Init ─────────────────────────────────────────────────────────────────
-    (async () => {
-      await loadMembers();
+    async function start() {
+      try { await loadMembers(); rosterFailed = false; }
+      catch { rosterFailed = true; render(); return; }
       await loadData();
       render();
-    })();
+    }
+    start();
   </script>
 </body>
 </html>
