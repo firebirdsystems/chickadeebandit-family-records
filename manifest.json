@@ -42,13 +42,7 @@
     "record_versions": {
       "kind": "endpoint_only",
       "read": "adult",
-      "audit_writes": true,
-      "retain_days": {
-        "default": 730,
-        "timestamp_column": "superseded_at",
-        "tier": "evidentiary",
-        "file_id_column": "file_id"
-      }
+      "audit_writes": true
     },
     "child_info": {
       "kind": "endpoint_only",
@@ -58,12 +52,7 @@
     "child_info_versions": {
       "kind": "endpoint_only",
       "read": "adult",
-      "audit_writes": true,
-      "retain_days": {
-        "default": 730,
-        "timestamp_column": "superseded_at",
-        "tier": "evidentiary"
-      }
+      "audit_writes": true
     },
     "record_purges": {
       "kind": "endpoint_only",
@@ -74,6 +63,19 @@
       "kind": "endpoint_only",
       "read": "adult",
       "audit_writes": true
+    }
+  },
+  "retention": {
+    "record_versions": {
+      "default": 730,
+      "timestamp_column": "superseded_at",
+      "tier": "evidentiary",
+      "file_id_column": "file_id"
+    },
+    "child_info_versions": {
+      "default": 730,
+      "timestamp_column": "superseded_at",
+      "tier": "evidentiary"
     }
   },
   "file_acls": {
@@ -334,7 +336,6 @@
     "label": "Family Records"
   },
   "resource_limits": {
-    "max_db_bytes": 52428800,
     "max_file_bytes": 20971520,
     "max_files_bytes": 524288000
   },
