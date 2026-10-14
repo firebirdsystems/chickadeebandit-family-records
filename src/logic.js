@@ -217,3 +217,43 @@ export function changedChildInfo(before, after) {
   }
   return changed;
 }
+
+/**
+ * Whether a failed write may nonetheless have been stored ("retry after a lost
+ * response"). No status: the request threw before any answer. A 400: the hub's
+ * answer for a write that timed out after it may have been stored, and for a
+ * retry that met the first try's row under its pinned id (UNIQUE_CONSTRAINT).
+ * A 5xx other than 507: the hub failing on its side, possibly after the write.
+ * Anything else (403, 404, 409, 413, 415, 429, 507) is a refusal that stored
+ * nothing — the only case in which an upload made for the row may be deleted.
+ */
+export function outcomeUnknown(e) {
+  if (e?.code === "UNIQUE_CONSTRAINT" || /UNIQUE constraint failed/i.test(String(e?.message ?? ""))) return true;
+  const status = Number(e?.status) || 0;
+  // Up to 400: no answer, a 2xx whose body could not be read as a result, or a 400.
+  return status <= 400 || (status >= 500 && status !== 507);
+}
+
+/**
+ * The line a failed write shows ("Refused, gone, or failed: which line"), from
+ * the error's `status` / `code` — never the hub's text. On the versioned-records
+ * endpoint a 404 is a record no longer there and a 409 a record changed (or
+ * retired) since this tab read it.
+ */
+export function failureLine(e, { action, thing } = {}) {
+  if (e?.forUser) return e.message;
+  if (e?.code === "UNIQUE_CONSTRAINT" || /UNIQUE constraint failed/i.test(String(e?.message ?? ""))) return `That ${thing} already exists.`;
+  if (e?.status === 403) return `You don’t have permission to ${action}.`;
+  if (e?.status === 507) return "The household’s storage is full — free up space first.";
+  if (e?.status === 404) return `This ${thing} has been removed.`;
+  if (e?.status === 409) return `This ${thing} was changed by someone else — check it first.`;
+  if (e?.status === 429) return "Too many tries — wait a minute and try again.";
+  return `Couldn’t ${action} — try again.`;
+}
+
+/** The line a failed file upload shows: the upload's own refusals first. */
+export function uploadFailureLine(e) {
+  if (e?.status === 413) return "That file is too large.";
+  if (e?.status === 415) return "That kind of file can’t be uploaded.";
+  return failureLine(e, { action: "attach that file", thing: "file" });
+}

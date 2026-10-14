@@ -90,6 +90,7 @@
       "version_table": "record_versions",
       "version_fk_column": "record_id",
       "allowed_columns": [
+        "id",
         "title",
         "record_kind",
         "category",

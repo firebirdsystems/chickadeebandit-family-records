@@ -106,7 +106,8 @@
     import {
       CATEGORIES, categoryFor, expiryStatus, expiryLabel, visibleRecords,
       validateRecord, CHILD_INFO_FIELDS, groupedChildInfo, isChildInfoEmpty, fmtBytes, searchableFields,
-      liveRecords, retiredRecords, versionsOf, purgeStateFor, changedChildInfo,
+      liveRecords, retiredRecords, versionsOf, purgeStateFor, changedChildInfo, outcomeUnknown,
+      failureLine, uploadFailureLine,
     } from "./logic.js";
 
     // The page heading is static markup; its mark comes from the SDK.
@@ -570,10 +571,10 @@
       } catch (e) {
         if (input) input.value = "";
         if (status) status.textContent = "";
-        // A refusal the hub explains (too large, wrong type, too many, storage
-        // full) is shown in its words; anything else gets the fixed line.
+        // A refusal (too large, wrong type, too many, storage full) says which;
+        // anything else gets the fixed line.
         console.error("[family-records] upload failed:", e);
-        hubAlert([413, 415, 429, 507].includes(e?.status) ? `Could not attach that file: ${e.message}` : "Couldn’t attach that file — try again.");
+        hubAlert(uploadFailureLine(e));
       }
     }
 
@@ -592,15 +593,37 @@
 
       btn.disabled = true; btn.textContent = "Saving…";
       const uploaded = pendingFile;   // captured for rollback below
+      const form = modalEl;
+      // A new record's id is minted once per open form and sent on every Save,
+      // so a retry after a lost answer finds the record the first try stored
+      // rather than adding a second. Forgotten with the form.
+      if (!existing && !DEMO && !form.dataset.recordId) form.dataset.recordId = crypto.randomUUID();
+      const recordId = existing ? null : form.dataset.recordId ?? null;
       const values = {
         ...rec,
         record_kind: rec.file_id ? "document" : "reference",
         mime_type:   uploaded?.mime ?? existing?.mime_type ?? null,
         size_bytes:  uploaded?.size ?? existing?.size_bytes ?? null,
+        ...(recordId ? { id: recordId } : {}),
       };
 
+      const firstRow = async (sql, params) => (await db(sql, params)).rows?.[0] ?? null;
+      // The record an earlier Save of this form stored, if any: by the pinned
+      // id; failing that, by the file this form uploaded, for a hub that
+      // ignores a supplied id and mints its own (a replace keeps its id, so the
+      // file is all that tells).
+      const findStored = async () =>
+        (recordId ? await firstRow(`SELECT * FROM ${P}records WHERE id = ?`, [recordId]) : null)
+        ?? (uploaded ? await firstRow(`SELECT * FROM ${P}records WHERE file_id = ?`, [uploaded.id]) : null);
+      let stored = null;
       try {
-        if (DEMO) {
+        // An earlier Save of this form whose answer was lost may have stored
+        // it: found, it is not written a second time. A read that fails stops
+        // here, so no second record is written.
+        if (!DEMO && form.dataset.answerLost) stored = await findStored();
+        if (stored) {
+          // landed earlier; the success path below runs once
+        } else if (DEMO) {
           // no-op: the demo state is refreshed from the seed below
         } else if (existing) {
           // A replace, not an update: the hub copies the current row — the file
@@ -612,22 +635,55 @@
         } else {
           await VERSIONED.create("records", values);
         }
-        pendingFile = null;
-        closeModal();
+      } catch (e) {
+        // The answer was lost (no status, a 400, a 5xx other than 507): the
+        // record may be stored, under the pinned id or naming the file this
+        // form uploaded. Found: it landed, and the success path below runs once.
+        if (!DEMO && outcomeUnknown(e)) {
+          form.dataset.answerLost = "1";
+          if (uploaded) uploaded.answerLost = true;
+          try { stored = await findStored(); }
+          catch (readErr) { console.error("[family-records] re-read failed:", readErr); }
+        }
+        if (!stored) {
+          btn.disabled = false; btn.textContent = existing ? "Save" : "Add record";
+          // Refused (any other status) and no earlier try stored it: nothing
+          // references the file this form uploaded — drop it rather than leave
+          // an orphan counting against the storage quota. Only ever that file:
+          // the record\u2019s existing file belongs to a version that is still in
+          // force. With an answer lost, a stored record may name it, so it is
+          // kept for the next Save.
+          if (uploaded && !uploaded.answerLost) {
+            FILES.delete(uploaded.id).catch(() => {});
+            pendingFile = null;
+          }
+          // The hub's text is never for the screen. An unknown outcome whose
+          // re-read found nothing (or failed) is worth another Save, with the
+          // same id — even a UNIQUE_CONSTRAINT answer, which is not "already
+          // exists" unless the record is found.
+          console.error("[family-records] save failed:", e);
+          hubAlert(outcomeUnknown(e) ? "Couldn’t save the record — try again." : failureLine(e, { action: "save the record", thing: "record" }));
+          return;
+        }
+        console.error("[family-records] save answer lost, record found:", e);
+      }
+      // Stored by an earlier try, with what the form held then: anything typed
+      // since is not in it.
+      const note = stored && ["title", "category", "child_id", "expires_on", "note", "file_id"]
+        .some((k) => String(stored[k] ?? "") !== String(rec[k] ?? ""))
+        ? "Saved as first entered — check it and update what changed." : "";
+      // A file picked after the try that landed was never sent: the record
+      // found under the pinned id names the earlier one, so nothing names it.
+      if (stored && uploaded && stored.file_id !== uploaded.id) FILES.delete(uploaded.id).catch(() => {});
+      // Stored: what follows can no longer make the save look failed.
+      // Only the form that saved: another dialog opened meanwhile keeps its own
+      // state and upload.
+      if (modalEl === form) { pendingFile = null; closeModal(); }
+      try {
         if (!DEMO) await loadData();
         render();
-      } catch (e) {
-        btn.disabled = false; btn.textContent = existing ? "Save" : "Add record";
-        // The file uploaded but nothing references it — drop it rather than
-        // leave an orphan counting against the storage quota. Only ever the
-        // file THIS attempt uploaded: the record\u2019s existing file belongs to a
-        // version that is still in force.
-        if (uploaded) {
-          FILES.delete(uploaded.id).catch(() => {});
-          pendingFile = null;
-        }
-        hubAlert(e.message);
-      }
+      } catch (e) { console.error("[family-records] redraw after save failed:", e); }
+      if (note) hubAlert(note);
     }
 
     async function onRetireRecord(id) {
@@ -640,10 +696,16 @@
       if (!ok) return;
       try {
         if (!DEMO) await VERSIONED.retire("records", id, rec.version ?? 1);
+      } catch (e) {
+        console.error("[family-records] retire failed:", e);
+        hubAlert(failureLine(e, { action: "retire the record", thing: "record" }));
+        return;
+      }
+      try {
         if (!DEMO) await loadData();
         else { rec.retired_at = new Date().toISOString(); rec.retired_by = me?.id ?? null; }
         render();
-      } catch (e) { hubAlert(e.message); }
+      } catch (e) { console.error("[family-records] redraw after retire failed:", e); }
     }
 
     // ── Destroying a record for good (both parents) ──────────────────────────
@@ -809,7 +871,8 @@
         render();
       } catch (e) {
         btn.disabled = false; btn.textContent = "Save";
-        hubAlert(e.message);
+        console.error("[family-records] child info save failed:", e);
+        hubAlert(failureLine(e, { action: "save the card", thing: "card" }));
       }
     }
 

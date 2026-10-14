@@ -38,6 +38,13 @@ describe("manifest.json", () => {
     expect(Array.isArray(manifest.data_access.reads)).toBe(true);
     expect(Array.isArray(manifest.data_access.writes)).toBe(true);
   });
+
+  it("a new record takes the page's pinned id, so a retry after a lost answer finds it", () => {
+    expect(manifest.versioned_records.records.id_column ?? "id").toBe("id");
+    expect(manifest.versioned_records.records.allowed_columns).toContain("id");
+    const html = readFileSync(join(__dirname, "../src/index.html"), "utf-8");
+    expect(html).toMatch(/\{ id: recordId \}/);
+  });
 });
 
 // ── ai_access SQL file validation ─────────────────────────────────────────────
