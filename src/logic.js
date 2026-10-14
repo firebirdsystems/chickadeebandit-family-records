@@ -219,6 +219,16 @@ export function changedChildInfo(before, after) {
 }
 
 /**
+ * Whether the child-info card read back after a lost answer is the save this
+ * tab sent: exactly one version past the one it replaced (0 for a new card),
+ * with this member stamped as the last to write it. Anything else is someone
+ * else's card, or a save of ours that someone has since written over.
+ */
+export function childInfoLanded(row, expectedVersion, memberId) {
+  return !!row && !!memberId && Number(row.version) === expectedVersion + 1 && row.updated_by === memberId;
+}
+
+/**
  * Whether a failed write may nonetheless have been stored ("retry after a lost
  * response"). No status: the request threw before any answer. A 400: the hub's
  * answer for a write that timed out after it may have been stored, and for a
@@ -238,7 +248,8 @@ export function outcomeUnknown(e) {
  * The line a failed write shows ("Refused, gone, or failed: which line"), from
  * the error's `status` / `code` — never the hub's text. On the versioned-records
  * endpoint a 404 is a record no longer there and a 409 a record changed (or
- * retired) since this tab read it.
+ * retired) since this tab read it — or, coded `version_limit`, one that keeps
+ * all the earlier versions it may.
  */
 export function failureLine(e, { action, thing } = {}) {
   if (e?.forUser) return e.message;
@@ -246,6 +257,8 @@ export function failureLine(e, { action, thing } = {}) {
   if (e?.status === 403) return `You don’t have permission to ${action}.`;
   if (e?.status === 507) return "The household’s storage is full — free up space first.";
   if (e?.status === 404) return `This ${thing} has been removed.`;
+  // The other 409: no room for another kept version. A re-read won't cure it.
+  if (e?.code === "version_limit") return `This ${thing} already keeps as many earlier versions as it can — it can’t be changed again.`;
   if (e?.status === 409) return `This ${thing} was changed by someone else — check it first.`;
   if (e?.status === 429) return "Too many tries — wait a minute and try again.";
   return `Couldn’t ${action} — try again.`;

@@ -18,6 +18,11 @@ describe("failureLine", () => {
     expect(failureLine(err(429), words)).toBe("Too many tries — wait a minute and try again.");
   });
 
+  it("tells the version cap from a stale version, which a re-read would cure", () => {
+    expect(failureLine(err(409, "version_limit"), { action: "save the card", thing: "card" }))
+      .toBe("This card already keeps as many earlier versions as it can — it can’t be changed again.");
+  });
+
   it("says try again for no answer, a 5xx or another 400", () => {
     for (const e of [new TypeError("Failed to fetch"), err(400), err(500), err(503)]) {
       expect(failureLine(e, words)).toBe("Couldn’t save the record — try again.");

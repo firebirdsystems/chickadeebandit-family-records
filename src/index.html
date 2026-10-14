@@ -106,7 +106,7 @@
     import {
       CATEGORIES, categoryFor, expiryStatus, expiryLabel, visibleRecords,
       validateRecord, CHILD_INFO_FIELDS, groupedChildInfo, isChildInfoEmpty, fmtBytes, searchableFields,
-      liveRecords, retiredRecords, versionsOf, purgeStateFor, changedChildInfo, outcomeUnknown,
+      liveRecords, retiredRecords, versionsOf, purgeStateFor, changedChildInfo, childInfoLanded, outcomeUnknown,
       failureLine, uploadFailureLine,
     } from "./logic.js";
 
@@ -850,30 +850,72 @@
       if (existing && Object.keys(changed).length === 0) { closeModal(); return; }
 
       btn.disabled = true; btn.textContent = "Saving…";
+      const form = modalEl;
+      // The card is pinned by the child's id; the version this form replaces
+      // (0 for a new card) tells our save from anyone else's on a read-back.
+      const sentVersion = existing ? existing.version ?? 1 : 0;
+      const readBack = async () =>
+        (await db(`SELECT * FROM ${P}child_info WHERE child_id = ?`, [childId])).rows?.[0] ?? null;
+      let stored = null, found = null;
       try {
-        if (!DEMO) {
-          if (existing) {
-            // Versioned, never governed: any adult may edit sizes and phone
-            // numbers — countersigning a shoe size would kill the daily use this
-            // card exists for — but the card they replaced is kept, with the name
-            // of whoever changed it. That is what makes a step-parent's edit
-            // safe rather than dangerous.
-            await VERSIONED.replace("child_info", childId, changed, existing.version ?? 1);
-          } else {
-            await VERSIONED.create("child_info", { child_id: childId, ...values });
-          }
-          await loadData();
-        } else {
-          childInfo.set(childId, { child_id: childId, ...values, updated_by: me?.id ?? null,
-            updated_at: new Date().toISOString(), version: (existing?.version ?? 0) + 1 });
+        // An earlier Save of this form whose answer was lost may have stored
+        // it: found, it is not written a second time (a replace would 409 on
+        // the version it moved past). A read that fails stops here.
+        if (!DEMO && form.dataset.answerLost) {
+          found = await readBack();
+          if (childInfoLanded(found, sentVersion, me?.id)) stored = found;
         }
-        closeModal();
-        render();
+        if (stored) {
+          // landed earlier; the success path below runs once
+        } else if (DEMO) {
+          childInfo.set(childId, { child_id: childId, ...values, updated_by: me?.id ?? null,
+            updated_at: new Date().toISOString(), version: sentVersion + 1 });
+        } else if (existing) {
+          // Versioned, never governed: any adult may edit sizes and phone
+          // numbers — countersigning a shoe size would kill the daily use this
+          // card exists for — but the card they replaced is kept, with the name
+          // of whoever changed it. That is what makes a step-parent's edit
+          // safe rather than dangerous.
+          await VERSIONED.replace("child_info", childId, changed, sentVersion);
+        } else {
+          await VERSIONED.create("child_info", { child_id: childId, ...values });
+        }
       } catch (e) {
-        btn.disabled = false; btn.textContent = "Save";
-        console.error("[family-records] child info save failed:", e);
-        hubAlert(failureLine(e, { action: "save the card", thing: "card" }));
+        // The answer was lost (no status, a 400 including UNIQUE, a 5xx other
+        // than 507): the card may be stored. Found as ours, the success path
+        // below runs once.
+        if (!DEMO && outcomeUnknown(e)) {
+          form.dataset.answerLost = "1";
+          try {
+            found = await readBack();
+            if (childInfoLanded(found, sentVersion, me?.id)) stored = found;
+          } catch (readErr) { console.error("[family-records] re-read failed:", readErr); }
+        }
+        if (!stored) {
+          btn.disabled = false; btn.textContent = "Save";
+          console.error("[family-records] child info save failed:", e);
+          // Read back as someone else's card (or one written over since):
+          // another Save would only meet it, so say so and show it.
+          const theirs = found && found.version !== undefined && Number(found.version) !== sentVersion;
+          hubAlert(theirs ? "This card was changed by someone else — check it first."
+            : outcomeUnknown(e) ? "Couldn’t save the card — try again."
+            : failureLine(e, { action: "save the card", thing: "card" }));
+          if (theirs) { try { await loadData(); render(); } catch {} }
+          return;
+        }
+        console.error("[family-records] child info answer lost, card found:", e);
       }
+      // Stored by an earlier try, with what the form held then: anything typed
+      // since is not in it.
+      const note = stored && CHILD_INFO_FIELDS.some((f) => (stored[f.key] ?? null) !== values[f.key])
+        ? "Saved as first entered — check it and update what changed." : "";
+      // Only the form that saved: another dialog opened meanwhile stays.
+      if (modalEl === form) closeModal();
+      try {
+        if (!DEMO) await loadData();
+        render();
+      } catch (e) { console.error("[family-records] redraw after save failed:", e); }
+      if (note) hubAlert(note);
     }
 
     // ── Init ─────────────────────────────────────────────────────────────────

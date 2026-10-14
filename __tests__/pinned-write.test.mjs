@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { outcomeUnknown } from "../src/logic.js";
+import { childInfoLanded, outcomeUnknown } from "../src/logic.js";
 
 const err = (props, message = "hub text") => Object.assign(new Error(message), props);
 
@@ -15,5 +15,21 @@ describe("outcomeUnknown", () => {
   });
   it("is a known refusal for any other 4xx and for 507", () => {
     for (const status of [403, 404, 409, 413, 415, 429, 507]) expect(outcomeUnknown(err({ status }))).toBe(false);
+  });
+});
+
+describe("childInfoLanded", () => {
+  it("finds a new card this member stored, and a replace one version on", () => {
+    expect(childInfoLanded({ version: 1, updated_by: "me" }, 0, "me")).toBe(true);
+    expect(childInfoLanded({ version: 4, updated_by: "me" }, 3, "me")).toBe(true);
+  });
+  it("is not ours when the replace never landed", () => {
+    expect(childInfoLanded({ version: 3, updated_by: "me" }, 3, "me")).toBe(false);
+    expect(childInfoLanded(null, 0, "me")).toBe(false);
+  });
+  it("is not ours when another adult wrote the card, or wrote over ours since", () => {
+    expect(childInfoLanded({ version: 1, updated_by: "other" }, 0, "me")).toBe(false);
+    expect(childInfoLanded({ version: 5, updated_by: "me" }, 3, "me")).toBe(false);
+    expect(childInfoLanded({ version: 1, updated_by: null }, 0, null)).toBe(false);
   });
 });
