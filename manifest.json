@@ -143,6 +143,9 @@
         "file_id": 120,
         "mime_type": 120
       },
+      "value_formats": {
+        "expires_on": "date"
+      },
       "max_versions": 50
     },
     "child_info": {
